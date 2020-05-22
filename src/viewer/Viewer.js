@@ -165,7 +165,7 @@ class Viewer {
      * @param event
      */
     off(event) { // TODO
-
+        console.log(event);
     }
 
     /**

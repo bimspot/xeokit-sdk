@@ -98,7 +98,7 @@ class Plugin {
      * @private
      */
     send(name, value) {
-        //...
+        console.log(name, value);
     }
 
     /**
