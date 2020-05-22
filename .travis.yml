@@ -11,3 +11,22 @@ script:
   - npm run lint
   # - npm run build
   # - npm test
+
+deploy:
+  - provider: releases
+    file: README.md
+    release_notes: "test release notes"
+    prerelease: true
+    overwrite: true
+    cleanup: true
+    edge: true
+    on:
+      branch: ci
+
+  - provider: releases
+    file: <path/to/zipped/minified/version>
+    release_notes: "test release notes"
+    cleanup: true
+    edge: true
+    on:
+      tags: true
