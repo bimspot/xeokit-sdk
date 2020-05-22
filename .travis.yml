@@ -2,30 +2,21 @@ language: node_js
 
 node_js:
   - node
-  - 'lts/*'
 
 before_script:
   - npm install
 
 script:
   - npm run lint
-  # - npm run build
+  - npm run build
   # - npm test
 
 deploy:
   - provider: releases
     file: README.md
-    release_notes: "test release notes"
+    release_notes_file: RELEASE_NOTES.md
     prerelease: true
     overwrite: true
-    cleanup: true
-    edge: true
-    on:
-      branch: ci
-
-  - provider: releases
-    file: <path/to/zipped/minified/version>
-    release_notes: "test release notes"
     cleanup: true
     edge: true
     on:
