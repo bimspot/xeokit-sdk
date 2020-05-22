@@ -4,6 +4,7 @@
   "description": "Web Programming Toolkit for 3D/2D BIM and AEC Graphics",
   "main": "index.js",
   "scripts": {
+    "build": "./node_modules/.bin/rollup -c",
     "test": "echo \"Error: no test specified\" && exit 1",
     "docs": "./node_modules/.bin/esdoc",
     "publish": "npm publish --access public",
@@ -41,7 +42,9 @@
   "devDependencies": {
     "esdoc": "^1.1.0",
     "esdoc-standard-plugin": "^1.0.0",
-    "eslint": "7.0.0"
+    "eslint": "7.0.0",
+    "rollup": "^2.10.7",
+    "rollup-plugin-terser": "^5.3.0"
   },
   "files": [
     "/src"
