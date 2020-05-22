@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {Node} from "../../viewer/scene/nodes/Node.js";
 import {utils} from "../../viewer/scene/utils.js";
 import {OBJLoader} from "./OBJLoader.js";

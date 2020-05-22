@@ -1,4 +1,4 @@
-import {Plugin} from "././../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {math} from "../../viewer/scene/math/math.js";
 import {Scene} from "../../viewer/scene/scene/Scene.js";
 import {DirLight} from "./../../viewer/scene/lights/DirLight.js";

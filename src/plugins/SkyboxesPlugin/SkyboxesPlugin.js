@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {Skybox} from "../../viewer/scene/skybox/Skybox.js"
 
 /**

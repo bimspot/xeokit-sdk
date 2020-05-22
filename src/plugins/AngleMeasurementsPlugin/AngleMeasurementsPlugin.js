@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {AngleMeasurement} from "./AngleMeasurement.js";
 import {AngleMeasurementsControl} from "./AngleMeasurementsControl.js";
 

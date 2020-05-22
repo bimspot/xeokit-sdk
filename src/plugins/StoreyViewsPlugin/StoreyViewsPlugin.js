@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {Storey} from "./Storey.js";
 import {IFCStoreyPlanObjectStates} from "./IFCStoreyPlanObjectStates.js";
 import {math} from "../../viewer/scene/math/math.js";
