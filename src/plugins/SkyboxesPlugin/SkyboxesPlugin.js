@@ -1,5 +1,5 @@
 import {Plugin} from "../../viewer/Plugin.js";
-import {Skybox} from "../../../xeokit/skybox/skybox.js"
+import {Skybox} from "../../viewer/scene/skybox/Skybox.js"
 
 /**
  * {@link Viewer} plugin that manages skyboxes
@@ -72,42 +72,6 @@ class SkyboxesPlugin extends Plugin {
                 this.clear();
                 break;
         }
-    }
-
-    /**
-     * @private
-     */
-    writeBookmark(bookmark) {
-        // var states = [];
-        // for (var id in this.skyboxes) {
-        //     if (this.skyboxes.hasOwnProperty(id)) {
-        //         var skybox = this.skyboxes[id];
-        //         states.push({
-        //             id: id,
-        //             active: skybox.active
-        //         });
-        //     }
-        // }
-        // if (states.length > 0) {
-        //     (bookmark.plugins = bookmark.plugins || {}).skyboxes = states;
-        // }
-    }
-
-    /**
-     * @private
-     */
-    readBookmark(bookmark) {
-        this.clear();
-        // var plugins = bookmark.plugins;
-        // if (plugins) {
-        //     var states = plugins.skyboxes;
-        //     if (states) {
-        //         for (var i = 0, len = states.length; i < len; i++) {
-        //             var state = states[i];
-        //             this.createSkybox(state.id, state);
-        //         }
-        //     }
-        // }
     }
 
     /**

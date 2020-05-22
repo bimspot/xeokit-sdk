@@ -14,7 +14,11 @@ import {buildBoxGeometry} from '../geometry/builders/buildBoxGeometry.js';
 import {PhongMaterial} from '../materials/PhongMaterial.js';
 import {EmphasisMaterial} from '../materials/EmphasisMaterial.js';
 import {EdgeMaterial} from '../materials/EdgeMaterial.js';
-import {Metrics} from "../metrics/Metrics.js";
+import {Metrics} from "../metriqs/Metriqs.js";
+import {SAO} from "../postfx/SAO.js";
+
+// Enables runtime check for redundant calls to object state update methods, eg. Scene#_objectVisibilityUpdated
+const ASSERT_OBJECT_STATE_UPDATE = false;
 
 // Cached vars to avoid garbage collection
 
@@ -72,7 +76,7 @@ function getEntityIDMap(scene, entityIds) {
  * ## Creating and accessing Scene components
  *
  * As a brief introduction to creating Scene components, we'll create a {@link Mesh} that has a
- * {@link uildTorusGeometry} and a {@link PhongMaterial}:
+ * {@link buildTorusGeometry} and a {@link PhongMaterial}:
  *
  * ````javascript
  * var teapotMesh = new Mesh(scene, {
@@ -147,24 +151,24 @@ function getEntityIDMap(scene, entityIds) {
  * For example, to pick a point on the surface of the closest entity at the given canvas coordinates:
  *
  * ````javascript
- * var hit = scene.pick({
+ * var pickResult = scene.pick({
  *      pickSurface: true,
  *      canvasPos: [23, 131]
  * });
  *
- * if (hit) { // Picked an entity
+ * if (pickResult) { // Picked an entity
  *
- *     var entity = hit.entity;
+ *     var entity = pickResult.entity;
  *
- *     var primitive = hit.primitive; // Type of primitive that was picked, usually "triangles"
- *     var primIndex = hit.primIndex; // Position of triangle's first index in the picked Mesh's Geometry's indices array
- *     var indices = hit.indices; // UInt32Array containing the triangle's vertex indices
- *     var localPos = hit.localPos; // Float32Array containing the picked Local-space position on the triangle
- *     var worldPos = hit.worldPos; // Float32Array containing the picked World-space position on the triangle
- *     var viewPos = hit.viewPos; // Float32Array containing the picked View-space position on the triangle
- *     var bary = hit.bary; // Float32Array containing the picked barycentric position within the triangle
- *     var normal = hit.normal; // Float32Array containing the interpolated normal vector at the picked position on the triangle
- *     var uv = hit.uv; // Float32Array containing the interpolated UV coordinates at the picked position on the triangle
+ *     var primitive = pickResult.primitive; // Type of primitive that was picked, usually "triangles"
+ *     var primIndex = pickResult.primIndex; // Position of triangle's first index in the picked Mesh's Geometry's indices array
+ *     var indices = pickResult.indices; // UInt32Array containing the triangle's vertex indices
+ *     var localPos = pickResult.localPos; // Float32Array containing the picked Local-space position on the triangle
+ *     var worldPos = pickResult.worldPos; // Float32Array containing the picked World-space position on the triangle
+ *     var viewPos = pickResult.viewPos; // Float32Array containing the picked View-space position on the triangle
+ *     var bary = pickResult.bary; // Float32Array containing the picked barycentric position within the triangle
+ *     var normal = pickResult.normal; // Float32Array containing the interpolated normal vector at the picked position on the triangle
+ *     var uv = pickResult.uv; // Float32Array containing the interpolated UV coordinates at the picked position on the triangle
  * }
  * ````
  *
@@ -178,14 +182,14 @@ function getEntityIDMap(scene, entityIds) {
  * in the way, as if they weren't there:
  *
  * ````javascript
- * var hit = scene.pick({
+ * var pickResult = scene.pick({
  *      canvasPos: [23, 131],
  *      includeEntities: ["gearbox#77.0", "gearbox#79.0"]
  * });
  *
- * if (hit) {
+ * if (pickResult) {
  *       // Entity will always be either "gearbox#77.0" or "gearbox#79.0"
- *       var entity = hit.entity;
+ *       var entity = pickResult.entity;
  * }
  * ````
  *
@@ -193,14 +197,14 @@ function getEntityIDMap(scene, entityIds) {
  * Entities if they happen to be in the way:
  *
  * ````javascript
- * var hit = scene.pick({
+ * var pickResult = scene.pick({
  *      canvasPos: [23, 131],
  *      excludeEntities: ["gearbox#77.0", "gearbox#79.0"]
  * });
  *
- * if (hit) {
+ * if (pickResult) {
  *       // Entity will never be "gearbox#77.0" or "gearbox#79.0"
- *       var entity = hit.entity;
+ *       var entity = pickResult.entity;
  * }
  * ````
  *
@@ -343,7 +347,9 @@ class Scene extends Component {
             throw "Mandatory config expected: valid canvasId or canvasElement";
         }
 
-        const transparent = !!cfg.transparent;
+        const transparent = (!!cfg.transparent);
+
+        this._aabbDirty = true;
 
         /**
          The number of models currently loading.
@@ -384,6 +390,7 @@ class Scene extends Component {
          * @type {{String:Entity}}
          */
         this.objects = {};
+        this._numObjects = 0;
 
         /**
          * Map of currently visible {@link Entity}s that represent objects.
@@ -395,6 +402,7 @@ class Scene extends Component {
          * @type {{String:Object}}
          */
         this.visibleObjects = {};
+        this._numVisibleObjects = 0;
 
         /**
          * Map of currently xrayed {@link Entity}s that represent objects.
@@ -408,6 +416,7 @@ class Scene extends Component {
          * @type {{String:Object}}
          */
         this.xrayedObjects = {};
+        this._numXRayedObjects = 0;
 
         /**
          * Map of currently highlighted {@link Entity}s that represent objects.
@@ -421,6 +430,7 @@ class Scene extends Component {
          * @type {{String:Object}}
          */
         this.highlightedObjects = {};
+        this._numHighlightedObjects = 0;
 
         /**
          * Map of currently selected {@link Entity}s that represent objects.
@@ -434,6 +444,21 @@ class Scene extends Component {
          * @type {{String:Object}}
          */
         this.selectedObjects = {};
+        this._numSelectedObjects = 0;
+
+        /**
+         * Map of currently colorized {@link Entity}s that represent objects.
+         *
+         * An Entity represents an object if {@link Entity#isObject} is ````true````.
+         *
+         * Each {@link Entity} is mapped here by {@link Entity#id}.
+         *
+         * @property colorizedObjects
+         * @final
+         * @type {{String:Object}}
+         */
+        this.colorizedObjects = {};
+        this._numColorizedObjects = 0;
 
         // Cached ID arrays, lazy-rebuilt as needed when stale after map updates
 
@@ -446,6 +471,7 @@ class Scene extends Component {
         this._xrayedObjectIds = null;
         this._highlightedObjectIds = null;
         this._selectedObjectIds = null;
+        this._colorizedObjectIds = null;
 
         this._collidables = {}; // Components that contribute to the Scene AABB
         this._compilables = {}; // Components that require shader compilation
@@ -495,6 +521,13 @@ class Scene extends Component {
         this.reflectionMaps = {};
 
         /**
+         * The real world offset for this Scene
+         *
+         * @type {Number[]}
+         */
+        this.realWorldOffset = cfg.realWorldOffset || new Float64Array([0, 0, 0]);
+
+        /**
          * Manages the HTML5 canvas for this Scene.
          *
          * @type {Canvas}
@@ -507,7 +540,8 @@ class Scene extends Component {
             backgroundColor: cfg.backgroundColor,
             webgl2: cfg.webgl2 !== false,
             contextAttr: cfg.contextAttr || {},
-            clearColorAmbient: cfg.clearColorAmbient
+            clearColorAmbient: cfg.clearColorAmbient,
+            premultipliedAlpha: cfg.premultipliedAlpha
         });
 
         this.canvas.on("boundary", () => {
@@ -537,6 +571,7 @@ class Scene extends Component {
                     return this.hash = ";";
                 }
                 let sectionPlane;
+
                 const hashParts = [];
                 for (let i = 0, len = sectionPlanes.length; i < len; i++) {
                     sectionPlane = sectionPlanes[i];
@@ -701,6 +736,14 @@ class Scene extends Component {
             origin: cfg.origin
         });
 
+        /** Configures Scalable Ambient Obscurance (SAO) for this Scene.
+         * @type {SAO}
+         * @final
+         */
+        this.sao = new SAO(this, {
+            enabled: cfg.saoEnabled
+        });
+
         this.ticksPerRender = cfg.ticksPerRender;
         this.ticksPerOcclusionTest = cfg.ticksPerOcclusionTest;
         this.passes = cfg.passes;
@@ -732,27 +775,27 @@ class Scene extends Component {
 
         new AmbientLight(this, {
             color: [0.3, 0.3, 0.3],
-            intensity: 1.0
+            intensity: 0.7
         });
 
         new DirLight(this, {
             dir: [0.8, -0.6, -0.8],
             color: [1.0, 1.0, 1.0],
-            intensity: 1.0,
+            intensity: 0.9,
             space: "view"
         });
 
         new DirLight(this, {
             dir: [-0.8, -0.4, -0.4],
             color: [1.0, 1.0, 1.0],
-            intensity: 1.0,
+            intensity: 0.9,
             space: "view"
         });
 
         new DirLight(this, {
             dir: [0.2, -0.8, 0.8],
-            color: [0.6, 0.6, 0.6],
-            intensity: 1.0,
+            color: [0.7, 0.7, 0.7],
+            intensity: 0.9,
             space: "view"
         });
 
@@ -787,7 +830,7 @@ class Scene extends Component {
                 window.nextID = 0;
             }
             //component.id = math.createUUID();
-            component.id = "_" + window.nextID++;
+            component.id = "__" + window.nextID++;
             while (this.components[component.id]) {
                 component.id = math.createUUID();
             }
@@ -897,48 +940,104 @@ class Scene extends Component {
 
     _registerObject(entity) {
         this.objects[entity.id] = entity;
+        this._numObjects++;
         this._objectIds = null; // Lazy regenerate
     }
 
     _deregisterObject(entity) {
         delete this.objects[entity.id];
+        this._numObjects--;
         this._objectIds = null; // Lazy regenerate
     }
 
-    _objectVisibilityUpdated(entity) {
+    _objectVisibilityUpdated(entity, notify = true) {
         if (entity.visible) {
+            if (ASSERT_OBJECT_STATE_UPDATE && this.visibleObjects[entity.id]) {
+                console.error("Redundant object visibility update (visible=true)");
+                return;
+            }
             this.visibleObjects[entity.id] = entity;
+            this._numVisibleObjects++;
         } else {
+            if (ASSERT_OBJECT_STATE_UPDATE && (!this.visibleObjects[entity.id])) {
+                console.error("Redundant object visibility update (visible=false)");
+                return;
+            }
             delete this.visibleObjects[entity.id];
+            this._numVisibleObjects--;
         }
         this._visibleObjectIds = null; // Lazy regenerate
+        if (notify) {
+            this.fire("objectVisibility", entity, true);
+        }
     }
 
     _objectXRayedUpdated(entity) {
         if (entity.xrayed) {
+            if (ASSERT_OBJECT_STATE_UPDATE && this.xrayedObjects[entity.id]) {
+                console.error("Redundant object xray update (xrayed=true)");
+                return;
+            }
             this.xrayedObjects[entity.id] = entity;
+            this._numXRayedObjects++;
         } else {
+            if (ASSERT_OBJECT_STATE_UPDATE && (!this.xrayedObjects[entity.id])) {
+                console.error("Redundant object xray update (xrayed=false)");
+                return;
+            }
             delete this.xrayedObjects[entity.id];
+            this._numXRayedObjects--;
         }
         this._xrayedObjectIds = null; // Lazy regenerate
     }
 
     _objectHighlightedUpdated(entity) {
         if (entity.highlighted) {
+            if (ASSERT_OBJECT_STATE_UPDATE && this.highlightedObjects[entity.id]) {
+                console.error("Redundant object highlight update (highlighted=true)");
+                return;
+            }
             this.highlightedObjects[entity.id] = entity;
+            this._numHighlightedObjects++;
         } else {
+            if (ASSERT_OBJECT_STATE_UPDATE && (!this.highlightedObjects[entity.id])) {
+                console.error("Redundant object highlight update (highlighted=false)");
+                return;
+            }
             delete this.highlightedObjects[entity.id];
+            this._numHighlightedObjects--;
         }
         this._highlightedObjectIds = null; // Lazy regenerate
     }
 
     _objectSelectedUpdated(entity) {
         if (entity.selected) {
+            if (ASSERT_OBJECT_STATE_UPDATE && this.selectedObjects[entity.id]) {
+                console.error("Redundant object select update (selected=true)");
+                return;
+            }
             this.selectedObjects[entity.id] = entity;
+            this._numSelectedObjects++;
         } else {
+            if (ASSERT_OBJECT_STATE_UPDATE && (!this.selectedObjects[entity.id])) {
+                console.error("Redundant object select update (selected=false)");
+                return;
+            }
             delete this.selectedObjects[entity.id];
+            this._numSelectedObjects--;
         }
         this._selectedObjectIds = null; // Lazy regenerate
+    }
+
+    _objectColorizeUpdated(entity, colorized) {
+        if (colorized) {
+            this.colorizedObjects[entity.id] = entity;
+            this._numColorizedObjects++;
+        } else {
+            delete this.colorizedObjects[entity.id];
+            this._numColorizedObjects--;
+        }
+        this._colorizedObjectIds = null; // Lazy regenerate
     }
 
     _webglContextLost() {
@@ -1053,6 +1152,7 @@ class Scene extends Component {
                 this._compilables[id].compile();
             }
         }
+        this.fire("compile", this, true);
     }
 
     _saveAmbientColor() {
@@ -1088,6 +1188,15 @@ class Scene extends Component {
     }
 
     /**
+     * Gets the number of {@link Entity}s in {@link Scene#objects}.
+     *
+     * @type {Number}
+     */
+    get numObjects() {
+        return this._numObjects;
+    }
+
+    /**
      * Gets the IDs of the {@link Entity}s in {@link Scene#objects}.
      *
      * @type {String[]}
@@ -1097,6 +1206,15 @@ class Scene extends Component {
             this._objectIds = Object.keys(this.objects);
         }
         return this._objectIds;
+    }
+
+    /**
+     * Gets the number of {@link Entity}s in {@link Scene#visibleObjects}.
+     *
+     * @type {Number}
+     */
+    get numVisibleObjects() {
+        return this._numVisibleObjects;
     }
 
     /**
@@ -1112,6 +1230,15 @@ class Scene extends Component {
     }
 
     /**
+     * Gets the number of {@link Entity}s in {@link Scene#xrayedObjects}.
+     *
+     * @type {Number}
+     */
+    get numXRayedObjects() {
+        return this._numXRayedObjects;
+    }
+
+    /**
      * Gets the IDs of the {@link Entity}s in {@link Scene#xrayedObjects}.
      *
      * @type {String[]}
@@ -1121,6 +1248,15 @@ class Scene extends Component {
             this._xrayedObjectIds = Object.keys(this.xrayedObjects);
         }
         return this._xrayedObjectIds;
+    }
+
+    /**
+     * Gets the number of {@link Entity}s in {@link Scene#highlightedObjects}.
+     *
+     * @type {Number}
+     */
+    get numHighlightedObjects() {
+        return this._numHighlightedObjects;
     }
 
     /**
@@ -1136,6 +1272,15 @@ class Scene extends Component {
     }
 
     /**
+     * Gets the number of {@link Entity}s in {@link Scene#selectedObjects}.
+     *
+     * @type {Number}
+     */
+    get numSelectedObjects() {
+        return this._numSelectedObjects;
+    }
+
+    /**
      * Gets the IDs of the {@link Entity}s in {@link Scene#selectedObjects}.
      *
      * @type {String[]}
@@ -1145,6 +1290,27 @@ class Scene extends Component {
             this._selectedObjectIds = Object.keys(this.selectedObjects);
         }
         return this._selectedObjectIds;
+    }
+
+    /**
+     * Gets the number of {@link Entity}s in {@link Scene#colorizedObjects}.
+     *
+     * @type {Number}
+     */
+    get numColorizedObjects() {
+        return this._numColorizedObjects;
+    }
+
+    /**
+     * Gets the IDs of the {@link Entity}s in {@link Scene#colorizedObjects}.
+     *
+     * @type {String[]}
+     */
+    get colorizedObjectIds() {
+        if (!this._colorizedObjectIds) {
+            this._colorizedObjectIds = Object.keys(this.colorizedObjects);
+        }
+        return this._colorizedObjectIds;
     }
 
     /**
@@ -1505,12 +1671,14 @@ class Scene extends Component {
      *
      * The AABB is represented by a six-element Float32Array containing the min/max extents of the axis-aligned volume, ie. ````[xmin, ymin,zmin,xmax,ymax, zmax]````.
      *
+     * When the Scene has no content, will be ````[-100,-100,-100,100,100,100]````.
+     *
      * @type {Number[]}
      */
     get aabb() {
         if (this._aabbDirty) {
             if (!this._aabb) {
-                this._aabb = math.AABB3(); // FIXME: return useful AABB when there are no collidables
+                this._aabb = math.AABB3();
             }
             let xmin = math.MAX_DOUBLE;
             let ymin = math.MAX_DOUBLE;
@@ -1551,12 +1719,12 @@ class Scene extends Component {
                 }
             }
             if (!valid) {
-                xmin = -1;
-                ymin = -1;
-                zmin = -1;
-                xmax = 1;
-                ymax = 1;
-                zmax = 1;
+                xmin = -100;
+                ymin = -100;
+                zmin = -100;
+                xmax = 100;
+                ymax = 100;
+                zmax = 100;
             }
             this._aabb[0] = xmin;
             this._aabb[1] = ymin;
@@ -1620,7 +1788,7 @@ class Scene extends Component {
      *         var worldNormal = pickResult.worldNormal; // Float32Array containing the interpolated World-space normal vector at the picked position on the triangle
      *         var uv = pickResult.uv; // Float32Array containing the interpolated UV coordinates at the picked position on the triangle
      *
-     *     } else if (pickResult.worldPos) {
+     *     } else if (pickResult.worldPos && pickResult.worldNormal) {
      *
      *         // Picked a point and normal on the entity surface
      *
@@ -1659,20 +1827,23 @@ class Scene extends Component {
      *           var origin = pickResult.origin; // Float32Array containing the World-space ray origin
      *           var direction = pickResult.direction; // Float32Array containing the World-space ray direction
      *
-     *     } else if (pickResult.worldPos) {
+     *     } else if (pickResult.worldPos && pickResult.worldNormal) {
      *
      *         // Picked a point and normal on the entity surface
      *
      *         var worldPos = pickResult.worldPos; // Float32Array containing the picked World-space position on the Entity surface
      *         var worldNormal = pickResult.worldNormal; // Float32Array containing the picked World-space normal vector on the Entity Surface
      *     }
+     * }
      *  ````
      *
      * @param {*} params Picking parameters.
      * @param {Boolean} [params.pickSurface=false] Whether to find the picked position on the surface of the Entity.
+     * @param {Boolean} [params.pickSurfaceNormal=false] Whether to find the picked normal on the surface of the Entity. Only works if ````pickSurface```` is given.
      * @param {Number[]} [params.canvasPos] Canvas-space coordinates. When ray-picking, this will override the **origin** and ** direction** parameters and will cause the ray to be fired through the canvas at this position, directly along the negative View-space Z-axis.
      * @param {Number[]} [params.origin] World-space ray origin when ray-picking. Ignored when canvasPos given.
      * @param {Number[]} [params.direction] World-space ray direction when ray-picking. Also indicates the length of the ray. Ignored when canvasPos given.
+     * @param {Number[]} [params.matrix] 4x4 transformation matrix to define the World-space ray origin and direction, as an alternative to ````origin```` and ````direction````.
      * @param {String[]} [params.includeEntities] IDs of {@link Entity}s to restrict picking to. When given, ignores {@link Entity}s whose IDs are not in this list.
      * @param {String[]} [params.excludeEntities] IDs of {@link Entity}s to ignore. When given, will pick *through* these {@link Entity}s, as if they were not there.
      * @param {PickResult} [pickResult] Holds the results of the pick attempt. Will use the Scene's singleton PickResult if you don't supply your own.
@@ -1689,8 +1860,8 @@ class Scene extends Component {
 
         params.pickSurface = params.pickSurface || params.rayPick; // Backwards compatibility
 
-        if (!params.canvasPos && (!params.origin || !params.direction)) {
-            this.warn("picking without canvasPos or ray origin and direction");
+        if (!params.canvasPos && !params.matrix && (!params.origin || !params.direction)) {
+            this.warn("picking without canvasPos, matrix, or ray origin and direction");
         }
 
         const includeEntities = params.includeEntities || params.include; // Backwards compat
@@ -1747,7 +1918,7 @@ class Scene extends Component {
     /**
      * Destroys all {@link SectionPlane}s in this Scene.
      */
-    clearClips() {
+    clearSectionPlanes() {
         const ids = Object.keys(this.sectionPlanes);
         for (let i = 0, len = ids.length; i < len; i++) {
             this.sectionPlanes[ids[i]].destroy();
@@ -1762,8 +1933,6 @@ class Scene extends Component {
      * Each {@link Entity} on which {@link Entity#isObject} is registered by {@link Entity#id} in {@link Scene#visibleObjects}.
      *
      * Each {@link Entity} is only included in the AABB when {@link Entity#collidable} is ````true````.
-     *
-     * Returns the AABB of all {@link Entity}s in {@link Scene#objects} by default, or TODO
      *
      * @param {String[]} ids Array of {@link Entity#id} values.
      * @returns {[Number, Number, Number, Number, Number, Number]} An axis-aligned World-space bounding box, given as elements ````[xmin, ymin, zmin, xmax, ymax, zmax]````.
@@ -2047,6 +2216,7 @@ class Scene extends Component {
         this.xrayedObjects = null;
         this.highlightedObjects = null;
         this.selectedObjects = null;
+        this.colorizedObjects = null;
         this.sectionPlanes = null;
         this.lights = null;
         this.lightMaps = null;
@@ -2056,6 +2226,7 @@ class Scene extends Component {
         this._xrayedObjectIds = null;
         this._highlightedObjectIds = null;
         this._selectedObjectIds = null;
+        this._colorizedObjectIds = null;
         this.types = null;
         this.components = null;
         this.canvas = null;

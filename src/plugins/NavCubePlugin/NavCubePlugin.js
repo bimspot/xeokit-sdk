@@ -12,7 +12,7 @@ import {CubeTextureCanvas} from "./CubeTextureCanvas.js";
 /**
  * {@link Viewer} plugin that lets us look at the entire {@link Scene} from along a chosen axis or diagonal.
  *
- *  <img src="https://user-images.githubusercontent.com/83100/55674490-c93c2e00-58b5-11e9-8a28-eb08876947c0.gif">
+ *  [<img src="https://user-images.githubusercontent.com/83100/55674490-c93c2e00-58b5-11e9-8a28-eb08876947c0.gif">](https://xeokit.github.io/xeokit-sdk/examples/#gizmos_NavCubePlugin)
  *
  * [[Run this example](https://xeokit.github.io/xeokit-sdk/examples/#gizmos_NavCubePlugin)]
  *
@@ -24,17 +24,19 @@ import {CubeTextureCanvas} from "./CubeTextureCanvas.js";
  * the Camera to look at the entire Scene along the corresponding axis. Clicking on an edge or a corner looks at
  * the entire Scene along a diagonal.
  * * The NavCube can be configured to either jump or fly the Camera to each new position. We can configure how tightly the
- * NavCube fits the Scene to view, and when flying, we can configure how fast it flies. See below for a usage example.
+ * NavCube fits the Scene to view, and when flying, we can configure how fast it flies. We can also configure whether the
+ * NavCube fits all objects to view, or just the currently visible objects. See below for a usage example.
+ * * Clicking the NavCube also sets {@link CameraControl#pivotPos} to the center of the fitted objects.
  *
  * ## Usage
  *
  * In the example below, we'll create a Viewer and add a NavCubePlugin, which will create a NavCube gizmo in the canvas
- * with the given ID. Then we'll use the {@link GLTFLoaderPlugin} to load a model into the Viewer's Scene. We can then
+ * with the given ID. Then we'll use the {@link XKTLoaderPlugin} to load a model into the Viewer's Scene. We can then
  * use the NavCube to look at the model along each axis or diagonal.
  *
  * ````JavaScript
  * import {Viewer} from "../src/viewer/Viewer.js";
- * import {GLTFLoaderPlugin} from "../src/plugins/GLTFLoaderPlugin/GLTFLoaderPlugin.js";
+ * import {XKTLoaderPlugin} from "../src/plugins/XKTLoaderPlugin/XKTLoaderPlugin.js";
  * import {NavCubePlugin} from "../src/plugins/NavCubePlugin/NavCubePlugin.js";
  *
  * const viewer = new Viewer({
@@ -53,14 +55,18 @@ import {CubeTextureCanvas} from "./CubeTextureCanvas.js";
  *
  *     cameraFly: true,       // Fly camera to each selected axis/diagonal
  *     cameraFitFOV: 45,      // How much field-of-view the scene takes once camera has fitted it to view
- *     cameraFlyDuration: 0.5 // How long (in seconds) camera takes to fly to each new axis/diagonal
+ *     cameraFlyDuration: 0.5,// How long (in seconds) camera takes to fly to each new axis/diagonal
+ *
+ *     fitVisible: false,     // Fit whole scene, including invisible objects (default)
+ *
+ *     synchProjection: false // Keep NavCube in perspective projection, even when camera switches to ortho (default)
  * });
  *
- * const gltfLoader = new GLTFLoaderPlugin(viewer);
+ * const xktLoader = new XKTLoaderPlugin(viewer);
  *
- * const model = gltfLoader.load({
+ * const model = xktLoader.load({
  *     id: "myModel",
- *     src: "./models/gltf/duplex/scene.gltf",
+ *     src: "./models/xkt/duplex/duplex.xkt",
  *     metaModelSrc: "./metaModels/duplex/metaModel.json", // Sets visual states of object in model
  *     edges: true
  * });
@@ -79,6 +85,17 @@ class NavCubePlugin extends Plugin {
      * @param {String} [cfg.cameraFly=true] Whether the {@link Camera} flies or jumps to each selected axis or diagonal.
      * @param {String} [cfg.cameraFitFOV=45] How much of the field-of-view, in degrees, that the 3D scene should fill the {@link Canvas} when the {@link Camera} moves to an axis or diagonal.
      * @param {String} [cfg.cameraFlyDuration=0.5] When flying the {@link Camera} to each new axis or diagonal, how long, in seconds, that the Camera takes to get there.
+     * @param {String} [cfg.color="lightgrey] Custom uniform color for the faces of the NavCube.
+     * @param {String} [cfg.frontColor="#55FF55"] Custom color for the front face of the NavCube. Overrides ````color````.
+     * @param {String} [cfg.backColor="#55FF55"] Custom color for the back face of the NavCube. Overrides ````color````.
+     * @param {String} [cfg.leftColor="#FF5555"] Custom color for the left face of the NavCube. Overrides ````color````.
+     * @param {String} [cfg.rightColor="#FF5555"] Custom color for the right face of the NavCube. Overrides ````color````.
+     * @param {String} [cfg.topColor="#5555FF"] Custom color for the top face of the NavCube. Overrides ````color````.
+     * @param {String} [cfg.bottomColor="#5555FF"] Custom color for the bottom face of the NavCube. Overrides ````color````.
+     * @param {String} [cfg.hoverColor="rgba(0,0,0,0.4)"] Custom color for highlighting regions on the NavCube as we hover the pointer over them.
+     * @param {Boolean} [cfg.fitVisible=false] Sets whether the axis, corner and edge-aligned views will fit the
+     * view to the entire {@link Scene} or just to visible object-{@link Entity}s. Entitys are visible objects when {@link Entity#isObject} and {@link Entity#visible} are both ````true````.
+     * @param {Boolean} [cfg.synchProjection=false] Sets whether the NavCube switches between perspective and orthographic projections in synchrony with the {@link Camera}. When ````false````, the NavCube will always be rendered with perspective projection.
      */
     constructor(viewer, cfg = {}) {
 
@@ -96,6 +113,9 @@ class NavCubePlugin extends Plugin {
             });
 
             this._navCubeCanvas = this._navCubeScene.canvas.canvas;
+
+            this._navCubeScene.input.keyboardEnabled = false; // Don't want keyboard input in the NavCube
+
         } catch (error) {
             this.error(error);
             return;
@@ -114,7 +134,7 @@ class NavCubePlugin extends Plugin {
         this._navCubeCamera.ortho.near = 0.1;
         this._navCubeCamera.ortho.far = 2000;
 
-        this._zUp = false;
+        this._zUp = Boolean(viewer.camera.zUp);
 
         var self = this;
 
@@ -142,33 +162,7 @@ class NavCubePlugin extends Plugin {
             };
         }());
 
-        this._onCameraMatrix = viewer.camera.on("matrix", this._synchCamera);
-        this._onCameraWorldAxis = viewer.camera.on("worldAxis", this._synchCamera);
-        this._onCameraFOV = viewer.camera.perspective.on("fov", (fov) => {
-            this._navCubeCamera.perspective.fov = fov;
-        });
-        this._onCameraProjection = viewer.camera.on("projection", (projection) => {
-            this._navCubeCamera.projection = projection;
-        });
-
-        viewer.camera.on("worldAxis", (worldAxis) => {
-            /*
-        case "zUp":
-            this._zUp = true;
-            this._cubeTextureCanvas.setZUp();
-            this._repaint();
-            this._synchCamera();
-            break;
-        case "yUp":
-            this._zUp = false;
-            this._cubeTextureCanvas.setYUp();
-            this._repaint();
-            this._synchCamera();
-            break;
-            */
-        });
-
-        this._cubeTextureCanvas = new CubeTextureCanvas(viewer);
+        this._cubeTextureCanvas = new CubeTextureCanvas(viewer, cfg);
 
         this._cubeSampler = new Texture(navCubeScene, {
             image: this._cubeTextureCanvas.getImage(),
@@ -228,6 +222,31 @@ class NavCubePlugin extends Plugin {
             visible: !!visible,
             pickable: false,
             backfaces: false
+        });
+
+        this._onCameraMatrix = viewer.camera.on("matrix", this._synchCamera);
+        this._onCameraWorldAxis = viewer.camera.on("worldAxis", () => {
+            if (viewer.camera.zUp) {
+                this._zUp = true;
+                this._cubeTextureCanvas.setZUp();
+                this._repaint();
+                this._synchCamera();
+            } else if (viewer.camera.yUp) {
+                this._zUp = false;
+                this._cubeTextureCanvas.setYUp();
+                this._repaint();
+                this._synchCamera();
+            }
+        });
+        this._onCameraFOV = viewer.camera.perspective.on("fov", (fov) => {
+            if (this._synchProjection) {
+                this._navCubeCamera.perspective.fov = fov;
+            }
+        });
+        this._onCameraProjection = viewer.camera.on("projection", (projection) => {
+            if (this._synchProjection) {
+                this._navCubeCamera.projection = projection;
+            }
         });
 
         var lastAreaId = -1;
@@ -434,10 +453,11 @@ class NavCubePlugin extends Plugin {
             var flyTo = (function () {
                 var center = math.vec3();
                 return function (dir, up, ok) {
-                    var aabb = viewer.scene.aabb;
+                    var aabb = self._fitVisible ? viewer.scene.getAABB(viewer.scene.visibleObjectIds) : viewer.scene.aabb;
                     var diag = math.getAABB3Diag(aabb);
                     math.getAABB3Center(aabb, center);
                     var dist = Math.abs(diag / Math.tan(55.0 / 2));
+                    viewer.cameraControl.pivotPos = center;
                     if (self._cameraFly) {
                         viewer.cameraFlight.flyTo({
                             look: center,
@@ -464,6 +484,8 @@ class NavCubePlugin extends Plugin {
         this.setCameraFitFOV(cfg.cameraFitFOV);
         this.setCameraFly(cfg.cameraFly);
         this.setCameraFlyDuration(cfg.cameraFlyDuration);
+        this.setFitVisible(cfg.fitVisible);
+        this.setSynchProjection(cfg.synchProjection);
     }
 
     send(name, value) {
@@ -505,6 +527,31 @@ class NavCubePlugin extends Plugin {
             return false;
         }
         return this._cubeMesh.visible;
+    }
+
+
+    /**
+     * Sets whether the axis, corner and edge-aligned views will fit the
+     * view to the entire {@link Scene} or just to visible object-{@link Entity}s.
+     *
+     * Entitys are visible objects when {@link Entity#isObject} and {@link Entity#visible} are both ````true````.
+     *
+     * @param {Boolean} fitVisible Set ````true```` to fit only visible object-Entitys.
+     */
+    setFitVisible(fitVisible = false) {
+        this._fitVisible = fitVisible;
+    }
+
+    /**
+     * Gets whether the axis, corner and edge-aligned views will fit the
+     * view to the entire {@link Scene} or just to visible object-{@link Entity}s.
+     *
+     * Entitys are visible objects when {@link Entity#isObject} and {@link Entity#visible} are both ````true````.
+     *
+     * @return {Boolean} True when fitting only visible object-Entitys.
+     */
+    getFitVisible() {
+        return this._fitVisible;
     }
 
     /**
@@ -573,6 +620,26 @@ class NavCubePlugin extends Plugin {
      */
     getCameraFlyDuration() {
         return this._cameraFlyDuration;
+    }
+
+    /**
+     * Sets whether the NavCube switches between perspective and orthographic projections in synchrony with
+     * the {@link Camera}. When ````false````, the NavCube will always be rendered with perspective projection.
+     *
+     * @param {Boolean} synchProjection Set ````true```` to keep NavCube projection synchronized with {@link Camera#projection}.
+     */
+    setSynchProjection(synchProjection = false) {
+        this._synchProjection = synchProjection;
+    }
+
+    /**
+     * Gets whether the NavCube switches between perspective and orthographic projections in synchrony with
+     * the {@link Camera}. When ````false````, the NavCube will always be rendered with perspective projection.
+     *
+     * @return {Boolean} True when NavCube projection is synchronized with {@link Camera#projection}.
+     */
+    getSynchProjection() {
+        return this._synchProjection;
     }
 
     /**

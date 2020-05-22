@@ -188,6 +188,8 @@ class Node extends Component {
 
         this.scene._aabbDirty = true;
 
+        this._numTriangles = 0;
+
         this._scale = math.vec3();
         this._quaternion = math.identityQuaternion();
         this._rotation = math.vec3();
@@ -310,6 +312,15 @@ class Node extends Component {
             this._updateAABB();
         }
         return this._aabb;
+    }
+
+    /**
+     * The number of triangles in this Node.
+     *
+     * @type {Number}
+     */
+    get numTriangles() {
+        return this._numTriangles;
     }
 
     /**
@@ -599,6 +610,10 @@ class Node extends Component {
         for (let i = 0, len = this._children.length; i < len; i++) {
             this._children[i].colorize = colorize;
         }
+        if (this._isObject) {
+            const colorized = (!!rgb);
+            this.scene._objectColorizeUpdated(this, colorized);
+        }
     }
 
     /**
@@ -694,6 +709,18 @@ class Node extends Component {
      */
     get receivesShadow() {
         return this._receivesShadow;
+    }
+
+    /**
+     * Gets if this Node can have Scalable Ambient Obscurance (SAO) applied to it.
+     *
+     * SAO is configured by {@link SAO}.
+     *
+     * @type {Boolean}
+     * @abstract
+     */
+    get saoEnabled() {
+        return false; // TODO: Support SAO on Nodes
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -833,6 +860,7 @@ class Node extends Component {
         }
         child._setWorldMatrixDirty();
         child._setAABBDirty();
+        this._numTriangles += child.numTriangles;
         return child;
     }
 
@@ -849,6 +877,7 @@ class Node extends Component {
                 child._setWorldMatrixDirty();
                 child._setAABBDirty();
                 this._setAABBDirty();
+                this._numTriangles -= child.numTriangles;
                 return;
             }
         }
@@ -864,6 +893,7 @@ class Node extends Component {
             child._parentNode = null;
             child._setWorldMatrixDirty();
             child._setAABBDirty();
+            this._numTriangles -= child.numTriangles;
         }
         this._children = [];
         this._setAABBDirty();
@@ -1218,6 +1248,10 @@ class Node extends Component {
             }
             if (this._highlighted) {
                 this.scene._objectHighlightedUpdated(this, false);
+            }
+            if (this._isObject) {
+                const colorized = false;
+                this.scene._objectColorizeUpdated(this, colorized);
             }
         }
         if (this._isModel) {

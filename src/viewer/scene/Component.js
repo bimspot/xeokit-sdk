@@ -2,6 +2,13 @@ import {core} from "./core.js";
 import {utils} from './utils.js';
 import {Map} from "./utils/Map.js";
 
+const idRegex = RegExp('(_[0-9]*)');
+
+console.log(idRegex.test("_9"));
+console.log(idRegex.test("_d"));
+console.log(idRegex.test("_02"));
+console.log(idRegex.test("_02d"));
+
 /**
  * @desc Base class for all xeokit components.
  *
@@ -57,6 +64,7 @@ import {Map} from "./utils/Map.js";
  *
  * We can then find those components like this:
  *
+ * ````javascript
  * // Find the Material
  * var material = viewer.scene.components["myMaterial"];
  *
@@ -66,6 +74,20 @@ import {Map} from "./utils/Map.js";
  * // Find our Material within the PhongMaterials
  * var materialAgain = phongMaterials["myMaterial"];
  * ````
+ *
+ * ## Restriction on IDs
+ *
+ * Auto-generated IDs are of the form ````"__0"````, ````"__1"````, ````"__2"```` ... and so on.
+ *
+ * Scene maintains a map of these IDs, along with a counter that it increments each time it generates a new ID.
+ *
+ * If Scene has created the IDs listed above, and we then destroy the ````Component```` with ID ````"__1"````,
+ * Scene will mark that ID as available, and will reuse it for the next default ID.
+ *
+ * Therefore, two restrictions your on IDs:
+ *
+ * * don't use IDs that begin with two underscores, and
+ * * don't reuse auto-generated IDs of destroyed Components.
  *
  * ## Logging
  *
@@ -168,6 +190,7 @@ class Component {
          */
         this.meta = cfg.meta || {};
 
+
         /**
          * ID of this Component, unique within the {@link Scene}.
          *
@@ -191,6 +214,7 @@ class Component {
         this._subIdMap = null; // Subscription subId pool
         this._subIdEvents = null; // Subscription subIds mapped to event names
         this._eventSubs = null; // Event names mapped to subscribers
+        this._eventSubsNum = null;
         this._events = null; // Maps names to events
         this._eventCallDepth = 0; // Helps us catch stack overflows from recursive events
         this._ownedComponents = null; // // Components created with #create - lazy-instantiated
@@ -293,6 +317,7 @@ class Component {
         }
         if (!this._eventSubs) {
             this._eventSubs = {};
+            this._eventSubsNum = {};
         }
         if (forget !== true) {
             this._events[event] = value || true; // Save notification
@@ -338,10 +363,16 @@ class Component {
         if (!this._eventSubs) {
             this._eventSubs = {};
         }
+        if (!this._eventSubsNum) {
+            this._eventSubsNum = {};
+        }
         let subs = this._eventSubs[event];
         if (!subs) {
             subs = {};
             this._eventSubs[event] = subs;
+            this._eventSubsNum[event] = 1;
+        } else {
+            this._eventSubsNum[event]++;
         }
         const subId = this._subIdMap.addItem(); // Create unique subId
         subs[subId] = {
@@ -374,6 +405,7 @@ class Component {
             const subs = this._eventSubs[event];
             if (subs) {
                 delete subs[subId];
+                this._eventSubsNum[event]--;
             }
             this._subIdMap.removeItem(subId); // Release subId
         }
@@ -405,7 +437,7 @@ class Component {
      * @return {Boolean} True if there are any subscribers to the given event on this component.
      */
     hasSubs(event) {
-        return (this._eventSubs && !!this._eventSubs[event]);
+        return (this._eventSubsNum && (this._eventSubsNum[event] > 0));
     }
 
     /**

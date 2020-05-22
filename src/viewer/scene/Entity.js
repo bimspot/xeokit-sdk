@@ -95,6 +95,15 @@ class Entity {
     }
 
     /**
+     * The approximate number of triangles in this Entity.
+     *
+     * @type {Number}
+     * @abstract
+     */
+    get numTriangles() {
+    }
+
+    /**
      * Sets if this Entity is visible.
      *
      * Only rendered when {@link Entity#visible} is ````true```` and {@link Entity#culled} is ````false````.
@@ -396,6 +405,18 @@ class Entity {
      * @abstract
      */
     get receivesShadow() {
+
+    }
+
+    /**
+     * Gets if this Entity can have Scalable Ambient Obscurance (SAO) applied to it.
+     *
+     * SAO is configured by {@link SAO}.
+     *
+     * @type {Boolean}
+     * @abstract
+     */
+    get saoEnabled() {
 
     }
 

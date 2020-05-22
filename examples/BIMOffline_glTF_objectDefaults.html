@@ -7,11 +7,21 @@
     <link href="css/styles.css" type="text/css" rel="stylesheet"/>
 
     <style>
-        #treePanel {
+
+        #myCanvas {
+            background: #ffffff;
+        }
+
+        /* ----------------------------------------------------------------------------------------------------------*/
+        /* TreeViewPlugin */
+        /* ----------------------------------------------------------------------------------------------------------*/
+
+        #treeViewContainer {
             padding-top: 25px;
             pointer-events: all;
             height: 100%;
             overflow-y: scroll;
+            overflow-x: hidden;
             position: absolute;
             background-color: rgba(255, 255, 255, 0.86);
             color: black;
@@ -25,25 +35,65 @@
             -ms-user-select: none;
             -moz-user-select: none;
             -webkit-user-select: none;
-            width: 350px;
+            width: 550px;
         }
 
-        #myCanvas {
-            background: #ffffff;
+        #treeViewContainer ul {
+            list-style: none;
+            padding-left: 1.75em;
         }
+
+        #treeViewContainer ul li {
+            position: relative;
+            width: 500px;
+        }
+
+        #treeViewContainer ul li a {
+            background-color: #eee;
+            border-radius: 50%;
+            color: #000;
+            display: inline-block;
+            height: 1.5em;
+            left: -1.5em;
+            position: absolute;
+            text-align: center;
+            text-decoration: none;
+            width: 1.5em;
+        }
+
+        #treeViewContainer ul li a.plus {
+            background-color: #ded;
+        }
+
+        #treeViewContainer ul li a.minus {
+            background-color: #eee;
+        }
+
+        #treeViewContainer ul li a:active {
+            top: 1px;
+        }
+
+        #treeViewContainer ul li span {
+            display: inline-block;
+            width: calc(100% - 50px);
+        }
+
+        #treeViewContainer .highlighted-node { /* Appearance of node highlighted with TreeViewPlugin#showNode() */
+            border: black solid 1px;
+            background: yellow;
+            color: black;
+            padding-left: 1px;
+            padding-right: 5px;
+        }
+
     </style>
-
-    <link href="./libs/inspire-tree/site-min.css" type="text/css" rel="stylesheet"/>
-    <script src="./libs/lodash.js"></script>
-    <script src="./libs/inspire-tree/inspire-tree.min.js"></script>
-    <script src="./libs/inspire-tree/inspire-tree-dom-min.js"></script>
 
 </head>
 <body>
 
 <canvas id="myCanvas"></canvas>
 
-<div id="treePanel" class="treePanel"></div>
+<div id="treeViewContainer"></div>
 
 <div id="info">
     <h1>XKTLoaderPlugin - Setting Initial Object Appearances</h1>
@@ -57,6 +107,11 @@
             <a target="_other"
                href="./../docs/class/src/plugins/GLTFLoaderPlugin/GLTFLoaderPlugin.js~GLTFLoaderPlugin.html">GLTFLoaderPlugin</a>
             - Loads model and IFC data from file system
+        </li>
+        <li>
+            <a target="_other"
+               href="./../docs/class/src/plugins/TreeViewPlugin/TreeViewPlugin.js~TreeViewPlugin.html">TreeViewPlugin</a>
+            - HTML tree view of IFC containment hierarchy
         </li>
         <li>
             <a target="_other"
@@ -78,9 +133,10 @@
 
     import {Viewer} from "../src/viewer/Viewer.js";
     import {GLTFLoaderPlugin} from "../src/plugins/GLTFLoaderPlugin/GLTFLoaderPlugin.js";
+    import {TreeViewPlugin} from "../src/plugins/TreeViewPlugin/TreeViewPlugin.js";
 
     //------------------------------------------------------------------------------------------------------------------
-    // Create a Viewer, arrange the camera, tweak xraying and highlight materials
+    // Create a Viewer, arrange the camera, tweak x-ray and highlight materials
     //------------------------------------------------------------------------------------------------------------------
 
     const viewer = new Viewer({
@@ -103,6 +159,15 @@
     viewer.scene.highlightMaterial.edgeColor = [1, 1, 0];
 
     //------------------------------------------------------------------------------------------------------------------
+    // Create an IFC structure tree view
+    //------------------------------------------------------------------------------------------------------------------
+
+    const treeView = new TreeViewPlugin(viewer, {
+        containerElement: document.getElementById("treeViewContainer"),
+        autoExpandDepth: 1 // Initially expand root tree node
+    });
+
+    //------------------------------------------------------------------------------------------------------------------
     // Load model and metadata using a GLTFLoaderPlugin
     //
     // Use our own map of initial default states for each Entity that represents an object in glTF
@@ -111,144 +176,111 @@
 
     const myObjectDefaults = {
         IfcRoof: {
-            colorize: [0.337255, 0.803922, 0.270588],
-            priority: 0
+            colorize: [0.337255, 0.803922, 0.270588]
         },
         IfcSlab: {
-            colorize: [0.837255, 0.603922, 0.670588],
-            priority: 0
+            colorize: [0.837255, 0.603922, 0.670588]
         },
         IfcWall: {
-            colorize: [ 0.537255, 0.537255, 0.837255],
-            priority: 0
+            colorize: [ 0.537255, 0.537255, 0.837255]
         },
         IfcWallStandardCase: {
-            colorize: [0.537255, 0.337255, 0.237255],
-            priority: 0
+            colorize: [0.537255, 0.337255, 0.237255]
         },
         IfcCovering: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 0
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcDoor: {
-            colorize: [0.637255, 0.603922, 0.670588],
-            priority: 1
+            colorize: [0.637255, 0.603922, 0.670588]
         },
         IfcStair: {
-            colorize: [0.637255, 0.603922, 0.670588],
-            priority: 2
+            colorize: [0.637255, 0.603922, 0.670588]
         },
         IfcStairFlight: {
-            colorize: [0.637255, 0.603922, 0.670588],
-            priority: 2
+            colorize: [0.637255, 0.603922, 0.670588]
         },
         IfcProxy: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 2
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcRamp: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 2
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcColumn: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 3
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcBeam: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 3
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcCurtainWall: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 3
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcPlate: {
             colorize: [0.8470588235, 0.427450980392, 0, 0.5],
-            opacity: 0.5,
-            priority: 3
+            opacity: 0.5
         },
         IfcTransportElement: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 3
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcFooting: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 3
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcRailing: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 4
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcFurnishingElement: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 4
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcFurniture: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 4
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcSystemFurnitureElement: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 4
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcFlowSegment: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 5
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcFlowitting: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 5
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcFlowTerminal: {
-            colorize: [0.137255, 0.403922, 0.870588],
-            priority: 5
+            colorize: [0.137255, 0.403922, 0.870588]
         },
         IfcFlowController: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 5
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcFlowFitting: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 5
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcDuctSegment: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 5
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcDistributionFlowElement: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 5
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcDuctFitting: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 5
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcLightFixture: {
-            colorize: [0.8470588235, 0.8470588235, 0.870588],
-            priority: 5
+            colorize: [0.8470588235, 0.8470588235, 0.870588]
         },
         IfcAirTerminal: {
-            colorize: [0.8470588235, 0.427450980392, 0],
-            priority: 6
+            colorize: [0.8470588235, 0.427450980392, 0]
         },
         IfcOpeningElement: {
             colorize: [0.137255, 0.403922, 0.870588],
             pickable: false,
-            visible: false,
-            priority: 6
+            visible: false
         },
         IfcSpace: {
             colorize: [0.137255, 0.403922, 0.870588],
             pickable: false,
             visible: false,
-            opacity: 0.5,
-            priority: 6
+            opacity: 0.5
         },
         IfcWindow: {
             colorize: [0.137255, 0.403922, 0.870588],
             pickable: false,
-            opacity: 0.4,
-            priority: 6
+            opacity: 0.4
         },
         IfcBuildingElementProxy: {
             colorize: [0.5, 0.5, 0.5]
@@ -263,8 +295,7 @@
         },
 
         DEFAULT: {
-            colorize: [0.5, 0.5, 0.5],
-            priority: 10
+            colorize: [0.5, 0.5, 0.5]
         }
     };
 
@@ -276,6 +307,13 @@
         metaModelSrc: "./metaModels/duplex/metaModel.json", // Creates a MetaObject instances in scene.metaScene.metaObjects
         objectDefaults: myObjectDefaults, // Use our custom initial default states for object Entities
         edges: true
+    });
+
+    const t0 = performance.now();
+    document.getElementById("time").innerHTML = "Loading model...";
+    model.on("loaded", function () {
+        const t1 = performance.now();
+        document.getElementById("time").innerHTML = "Model loaded in " + Math.floor(t1 - t0) + " milliseconds<br>Objects: " + model.numEntities;
     });
 
     //------------------------------------------------------------------------------------------------------------------
@@ -291,13 +329,10 @@
         });
 
         if (hit) {
-
             if (!lastEntity || hit.entity.id !== lastEntity.id) {
-
                 if (lastEntity) {
                     lastEntity.highlighted = false;
                 }
-
                 lastEntity = hit.entity;
                 hit.entity.highlighted = true;
             }
@@ -308,94 +343,6 @@
                 lastEntity = null;
             }
         }
-    });
-
-    //------------------------------------------------------------------------------------------------------------------
-    // When model loaded, create a tree view that toggles object xraying
-    //------------------------------------------------------------------------------------------------------------------
-
-    const t0 = performance.now();
-
-    document.getElementById("time").innerHTML = "Loading model...";
-
-    model.on("loaded", function () {
-
-        const t1 = performance.now();
-        document.getElementById("time").innerHTML = "Model loaded in " + Math.floor(t1 - t0) + " milliseconds<br>Objects: " + model.numEntities + "<br>Triangles: " + model.numTriangles;
-
-        // Fit model to view
-        model.on("loaded", () => {
-            viewer.cameraFlight.jumpTo(model);
-        });
-
-        // Builds tree view data from MetaModel
-        var createData = function (metaModel) {
-            const data = [];
-
-            function visit(expand, data, metaObject) {
-                if (!metaObject) {
-                    return;
-                }
-                var child = {
-                    id: metaObject.id,
-                    text: metaObject.name
-                };
-                data.push(child);
-                const children = metaObject.children;
-                if (children) {
-                    child.children = [];
-                    for (var i = 0, len = children.length; i < len; i++) {
-                        visit(true, child.children, children[i]);
-                    }
-                }
-            }
-
-            visit(true, data, metaModel.rootMetaObject);
-            return data;
-        };
-
-        // Get MetaModel we loaded for our model
-        const modelId = model.id;
-        const metaModel = viewer.metaScene.metaModels[modelId];
-
-        // Create the tree view
-        var treeView = new InspireTree({
-            selection: {
-                autoSelectChildren: true,
-                autoDeselect: true,
-                mode: 'checkbox'
-            },
-            checkbox: {
-                autoCheckChildren: true
-            },
-            data: createData(metaModel)
-        });
-
-        new InspireTreeDOM(treeView, {
-            target: document.getElementById("treePanel")
-        });
-
-        // Initialize the tree view once loaded
-        treeView.on('model.loaded', function () {
-
-            treeView.select();
-
-            treeView.model.expand();
-
-            treeView.on('node.selected', function (event, node) {
-                const objectId = event.id;
-                viewer.scene.setObjectsXRayed(objectId, false);
-                viewer.scene.setObjectsCollidable(objectId, true);
-                viewer.scene.setObjectsPickable(objectId, true);
-            });
-
-            treeView.on('node.deselected', function (event, node) {
-                const objectId = event.id;
-                viewer.scene.setObjectsXRayed(objectId, true);
-                viewer.scene.setObjectsCollidable(objectId, false);
-                viewer.scene.setObjectsPickable(objectId, false);
-            });
-        });
     });
 
 </script>

@@ -324,6 +324,8 @@ class CameraFlightAnimation extends Component {
                 this._projMatrix2 = camera.perspective.matrix.slice();
                 camera.projection = "customProjection";
             }
+        } else {
+            this._projection2 = null;
         }
 
         this.fire("started", params, true);
@@ -349,6 +351,7 @@ class CameraFlightAnimation extends Component {
      * @param {Number[]} [params.eye] Position to fly the eye position to.
      * @param {Number[]} [params.look]  Position to fly the look position to.
      * @param {Number[]} [params.up] Position to fly the up vector to.
+     * @param {String} [params.projection] Projection type to transition into. Can be any of the values of {@link Camera.projection}.
      * @param {Number} [params.fitFOV] How much of field-of-view, in degrees, that a target {@link Entity} or its AABB should fill the canvas on arrival. Overrides {@link CameraFlightAnimation#fitFOV}.
      * @param {Boolean} [params.fit] Whether to fit the target to the view volume. Overrides {@link CameraFlightAnimation#fit}.
      */
@@ -443,6 +446,10 @@ class CameraFlightAnimation extends Component {
             if (newUp) {
                 camera.up = newUp;
             }
+        }
+
+        if (params.projection) {
+            camera.projection = params.projection;
         }
     }
 

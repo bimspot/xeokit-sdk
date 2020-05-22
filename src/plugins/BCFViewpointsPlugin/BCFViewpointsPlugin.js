@@ -80,6 +80,21 @@ const tempVec3 = math.vec3();
  * });
  * ````
  *
+ * ## Saving View Setup Hints
+ *
+ * BCFViewpointsPlugin can optionally save hints in the viewpoint, which indicate how to set up the view when
+ * loading it again.
+ *
+ * Here's the {@link BCFViewpointsPlugin#getViewpoint} call again, this time saving some hints:
+ *
+ * ````javascript
+ * const viewpoint = bcfViewpoints.getViewpoint({ // Options
+ *     spacesVisible: true, // Force IfcSpace types visible in the viewpoint (default is false)
+ *     spaceBoundariesVisible: false, // Show IfcSpace boundaries in the viewpoint (default is false)
+ *     openingsVisible: true // Force IfcOpening types visible in the viewpoint (default is false)
+ * });
+ * ````
+ *
  * ## Loading a BCF Viewpoint
  *
  * Assuming that we have our BCF viewpoint in a JSON object, let's now restore it with {@link BCFViewpointsPlugin#setViewpoint}:
@@ -108,6 +123,55 @@ const tempVec3 = math.vec3();
  * });
  * ````
  *
+ * ## Dealing With Loaded Models That Are Not in the Viewpoint
+ *
+ * If, for example, we load model "duplex", hide some objects, then save a BCF viewpoint with
+ * ````BCFViewpointsPlugin````, then load another model, "schependomlaan", then load the viewpoint again, then
+ * sometimes all of the objects in model "schependomlaan" become visible, along with the visible objects in the
+ * viewpoint, which belong to model "duplex".
+ *
+ * The reason is that, when saving a BCF viewpoint, BCF logic works like the following pseudo code:
+ *
+ * ````
+ * If numVisibleObjects < numInvisibleObjects
+ *      save IDs of visible objects in BCF
+ *      exceptions = "visible objects"
+ * else
+ *      save IDS of invisible objects in BCF
+ *      exceptions = "invisible objects"
+ * ````
+ *
+ * When loading the viewpoint again:
+ *
+ * ````
+ * If exceptions = "visible objects"
+ *      hide all objects
+ *      show visible objects in BCF
+ * else
+ *      show all objects
+ *      hide invisible objects in BCF
+ * ````
+ *
+ * When the exception is "visible objects", loading the viewpoint shows all the objects in the first, which includes
+ * objects in "schependomlaan", which can be confusing, because those were not even loaded when we first
+ * saved the viewpoint..
+ *
+ * To solve this, we can supply a ````defaultInvisible```` option to {@link BCFViewpointsPlugin#getViewpoint}, which
+ * will force the plugin to save the IDs of all visible objects while making invisible objects the exception.
+ *
+ * That way, when we load the viewpoint again, after loading model "schependomlaan", the plugin will hide all objects
+ * in the scene first (which will include objects belonging to model "schependomlaan"), then make the objects in the
+ * viewpoint visible (which will only be those of object "duplex").
+ *
+ * ````javascript
+ * const viewpoint = bcfViewpoints.getViewpoint({ // Options
+ *     //..
+ *     defaultInvisible: true
+ * });
+ * ````
+ *
+ * [[Run an example](http://xeokit.github.io/xeokit-sdk/examples/#BCF_LoadViewpoint_defaultInvisible)]
+ *
  * @class BCFViewpointsPlugin
  */
 class BCFViewpointsPlugin extends Plugin {
@@ -129,14 +193,14 @@ class BCFViewpointsPlugin extends Plugin {
          * @property originatingSystem
          * @type {string}
          */
-        this.originatingSystem = cfg.originatingSystem || "xeokit";
+        this.originatingSystem = cfg.originatingSystem || "xeokit.io";
 
         /**
          * Identifies the authoring tool to include in BCF viewpoints saved by this plugin.
          * @property authoringTool
          * @type {string}
          */
-        this.authoringTool = cfg.authoringTool || "xeokit";
+        this.authoringTool = cfg.authoringTool || "xeokit.io";
     }
 
     /**
@@ -145,6 +209,15 @@ class BCFViewpointsPlugin extends Plugin {
      * Note that xeokit's {@link Camera#look} is the **point-of-interest**, whereas the BCF ````camera_direction```` is a
      * direction vector. Therefore, we save ````camera_direction```` as the vector from {@link Camera#eye} to {@link Camera#look}.
      *
+     * @param {*} [options] Options for getting the viewpoint.
+     * @param {Boolean} [options.spacesVisible=false] Indicates whether ````IfcSpace```` types should be forced visible in the viewpoint.
+     * @param {Boolean} [options.openingsVisible=false] Indicates whether ````IfcOpening```` types should be forced visible in the viewpoint.
+     * @param {Boolean} [options.spaceBoundariesVisible=false] Indicates whether the boundaries of ````IfcSpace```` types should be visible in the viewpoint.
+     * @param {Boolean} [options.snapshot=true] Indicates whether the snapshot should be included in the viewpoint.
+     * @param {Boolean} [options.defaultInvisible=false] When ````true````, will save the default visibility of all objects
+     * as ````false````. This means that when we load the viewpoint again, and there are additional models loaded that
+     * were not saved in the viewpoint, those models will be hidden when we load the viewpoint, and that only the
+     * objects in the viewpoint will be visible.
      * @returns {*} BCF JSON viewpoint object
      * @example
      *
@@ -154,7 +227,11 @@ class BCFViewpointsPlugin extends Plugin {
      *     //...
      * });
      *
-     * const viewpoint = bcfPlugin.getViewpoint();
+     * const viewpoint = bcfPlugin.getViewpoint({ // Options - see constructor
+     *     spacesVisible: false,          // Default
+     *     spaceBoundariesVisible: false, // Default
+     *     openingsVisible: false         // Default
+     * });
      *
      * // viewpoint will resemble the following:
      *
@@ -210,30 +287,43 @@ class BCFViewpointsPlugin extends Plugin {
      *     }
      * }
      */
-    getViewpoint() {
-
+    getViewpoint(options = {}) {
         const scene = this.viewer.scene;
         const camera = scene.camera;
+        const realWorldOffset = scene.realWorldOffset;
 
         let bcfViewpoint = {};
 
         // Camera
 
-        const lookDirection = math.normalizeVec3(math.subVec3(camera.look, camera.eye, math.vec3()));
+        let lookDirection = math.normalizeVec3(math.subVec3(camera.look, camera.eye, math.vec3()));
+        let eye = camera.eye;
+        let up = camera.up;
 
-        bcfViewpoint.perspective_camera = {
-            camera_view_point: xyzArrayToObject(camera.eye),
-            camera_direction: xyzArrayToObject(lookDirection),
-            camera_up_vector: xyzArrayToObject(camera.up),
-            field_of_view: camera.perspective.fov,
-        };
+        if (camera.yUp) {
+            // BCF is Z up
+            lookDirection = YToZ(lookDirection);
+            eye = YToZ(eye);
+            up = YToZ(up);
+        }
 
-        bcfViewpoint.orthogonal_camera = {
-            camera_view_point: xyzArrayToObject(camera.eye),
-            camera_direction: xyzArrayToObject(lookDirection),
-            camera_up_vector: xyzArrayToObject(camera.up),
-            view_to_world_scale: camera.ortho.scale,
-        };
+        const camera_view_point = xyzArrayToObject(math.addVec3(eye, realWorldOffset));
+
+        if (camera.projection === "ortho") {
+            bcfViewpoint.orthogonal_camera = {
+                camera_view_point: camera_view_point,
+                camera_direction: xyzArrayToObject(lookDirection),
+                camera_up_vector: xyzArrayToObject(up),
+                view_to_world_scale: camera.ortho.scale,
+            };
+        } else {
+            bcfViewpoint.perspective_camera = {
+                camera_view_point: camera_view_point,
+                camera_direction: xyzArrayToObject(lookDirection),
+                camera_up_vector: xyzArrayToObject(up),
+                field_of_view: camera.perspective.fov,
+            };
+        }
 
         bcfViewpoint.lines = [];
         bcfViewpoint.bitmaps = [];
@@ -257,9 +347,9 @@ class BCFViewpointsPlugin extends Plugin {
         bcfViewpoint.components = {
             visibility: {
                 view_setup_hints: {
-                    spaces_visible: false,
-                    space_boundaries_visible: false,
-                    openings_visible: false
+                    spaces_visible: !!options.spacesVisible,
+                    space_boundaries_visible: !!options.spaceBoundariesVisible,
+                    openings_visible: !!options.openingsVisible
                 }
             }
         };
@@ -270,7 +360,7 @@ class BCFViewpointsPlugin extends Plugin {
         const invisibleObjectIds = objectIds.filter(id => !visibleObjects[id]);
         const selectedObjectIds = scene.selectedObjectIds;
 
-        if (visibleObjectIds.length < invisibleObjectIds.length) {
+        if (options.defaultInvisible || visibleObjectIds.length < invisibleObjectIds.length) {
             bcfViewpoint.components.visibility.exceptions = visibleObjectIds.map(el => this._objectIdToComponent(el));
             bcfViewpoint.components.visibility.default_visibility = false;
         } else {
@@ -280,10 +370,12 @@ class BCFViewpointsPlugin extends Plugin {
 
         bcfViewpoint.components.selection = selectedObjectIds.map(el => this._objectIdToComponent(el));
 
-        bcfViewpoint.snapshot = {
-            snapshot_type: "png",
-            snapshot_data: this.viewer.getSnapshot({format: "png"})
-        };
+        if (options.snapshot !== false) {
+            bcfViewpoint.snapshot = {
+                snapshot_type: "png",
+                snapshot_data: this.viewer.getSnapshot({format: "png"})
+            };
+        }
 
         return bcfViewpoint;
     }
@@ -291,8 +383,8 @@ class BCFViewpointsPlugin extends Plugin {
     _objectIdToComponent(objectId) {
         return {
             ifc_guid: objectId,
-            originating_system: this.originatingSystem || "xeokit.io",
-            authoring_tool_id: this.authoringTool || "xeokit.io"
+            originating_system: this.originatingSystem,
+            authoring_tool_id: this.authoringTool
         };
     }
 
@@ -307,11 +399,14 @@ class BCFViewpointsPlugin extends Plugin {
      * (on the surface of any visible and pickable {@link Entity}) with a 3D ray fired from ````camera_view_point```` in
      * the direction of ````camera_direction````.
      *
-     * @param {*} bcfViewpoint  BCF JSON viewpoint object or "reset" / "RESET" to reset the viewer, which clears SectionPlanes,
+     * @param {*} bcfViewpoint  BCF JSON viewpoint object,
      * shows default visible entities and restores camera to initial default position.
-     * @params {*} [options] Options for setting the viewpoint.
-     * @params {Boolean} [options.rayCast=true] When ````true```` (default), will attempt to set {@link Camera#look} to the closest
+     * @param {*} [options] Options for setting the viewpoint.
+     * @param {Boolean} [options.rayCast=true] When ````true```` (default), will attempt to set {@link Camera#look} to the closest
      * point of surface intersection with a ray fired from the BCF ````camera_view_point```` in the direction of ````camera_direction````.
+     * @param {Boolean} [options.immediate] When ````true```` (default), immediately set camera position.
+     * @param {Boolean} [options.duration] Flight duration in seconds.  Overrides {@link CameraFlightAnimation#duration}. Only applies when ````immediate```` is ````true````.
+     * @param {Boolean} [options.reset=true] When ````true```` (default), set {@link Entity#xrayed} and {@link Entity#highlighted} ````false```` on all scene objects.
      */
     setViewpoint(bcfViewpoint, options = {}) {
 
@@ -323,74 +418,115 @@ class BCFViewpointsPlugin extends Plugin {
         const scene = viewer.scene;
         const camera = scene.camera;
         const rayCast = (options.rayCast !== false);
+        const immediate = (options.immediate !== false);
+        const reset = (options.reset !== false);
+        const realWorldOffset = scene.realWorldOffset;
+
+        scene.clearSectionPlanes();
 
         if (bcfViewpoint.clipping_planes) {
             bcfViewpoint.clipping_planes.forEach(function (e) {
-                new SectionPlane(viewer.scene, {
+                new SectionPlane(scene, {
                     pos: xyzObjectToArray(e.location, tempVec3),
                     dir: xyzObjectToArray(e.direction, tempVec3)
                 });
             });
         }
 
-        if (bcfViewpoint.components) {
-            if (!bcfViewpoint.components.visibility.default_visibility) {
-                scene.setObjectsVisible(scene.objectIds, false);
-                bcfViewpoint.components.visibility.exceptions.forEach(x => scene.setObjectsVisible(x.ifc_guid, true));
-            } else {
-                scene.setObjectsVisible(scene.objectIds, true);
-                scene.setObjectsVisible("space", false);
-                bcfViewpoint.components.visibility.exceptions.forEach(x => scene.setObjectsVisible(x.ifc_guid, false));
-            }
+        if (reset) {
+            scene.setObjectsXRayed(scene.xrayedObjectIds, false);
+            scene.setObjectsHighlighted(scene.highlightedObjectIds, false);
+            scene.setObjectsSelected(scene.selectedObjectIds, false);
         }
 
-        if (bcfViewpoint.components.selection) {
-            scene.setObjectsSelected(scene.selectedObjects, false);
-            Object.keys(scene.models).forEach((id) => {
-                bcfViewpoint.components.selection.forEach(x => scene.setObjectsSelected(x.ifc_guid, true));
-            });
+        if (bcfViewpoint.components) {
+
+            if (bcfViewpoint.components.visibility) {
+
+                if (!bcfViewpoint.components.visibility.default_visibility) {
+                    scene.setObjectsVisible(scene.objectIds, false);
+                    if (bcfViewpoint.components.visibility.exceptions) {
+                        bcfViewpoint.components.visibility.exceptions.forEach(x => scene.setObjectsVisible(x.ifc_guid, true));
+                    }
+                } else {
+                    scene.setObjectsVisible(scene.objectIds, true);
+                    if (bcfViewpoint.components.visibility.exceptions) {
+                        bcfViewpoint.components.visibility.exceptions.forEach(x => scene.setObjectsVisible(x.ifc_guid, false));
+                    }
+                }
+
+                const view_setup_hints = bcfViewpoint.components.visibility.view_setup_hints;
+                if (view_setup_hints) {
+                    if (view_setup_hints.spaces_visible === false) {
+                        scene.setObjectsVisible(viewer.metaScene.getObjectIDsByType("IfcSpace"), false);
+                    }
+                    if (view_setup_hints.openings_visible === false) {
+                        scene.setObjectsVisible(viewer.metaScene.getObjectIDsByType("IfcOpening"), false);
+                    }
+                    if (view_setup_hints.space_boundaries_visible !== undefined) {
+                        // TODO: Ability to show boundaries
+                    }
+                }
+            }
+
+            if (bcfViewpoint.components.selection) {
+                scene.setObjectsSelected(scene.selectedObjectIds, false);
+                Object.keys(scene.models).forEach(() => {
+                    bcfViewpoint.components.selection.forEach(x => scene.setObjectsSelected(x.ifc_guid, true));
+                });
+            }
         }
 
         if (bcfViewpoint.perspective_camera || bcfViewpoint.orthogonal_camera) {
-
             let eye;
             let look;
             let up;
+            let projection;
 
             if (bcfViewpoint.perspective_camera) {
-
                 eye = xyzObjectToArray(bcfViewpoint.perspective_camera.camera_view_point, tempVec3);
                 look = xyzObjectToArray(bcfViewpoint.perspective_camera.camera_direction, tempVec3);
+                up = xyzObjectToArray(bcfViewpoint.perspective_camera.camera_up_vector, tempVec3);
 
-                camera.up = xyzObjectToArray(bcfViewpoint.perspective_camera.camera_up_vector, tempVec3);
                 camera.perspective.fov = bcfViewpoint.perspective_camera.field_of_view;
-            }
 
-            if (bcfViewpoint.orthogonal_camera) {
-
+                projection = "perspective";
+            } else {
                 eye = xyzObjectToArray(bcfViewpoint.orthogonal_camera.camera_view_point, tempVec3);
                 look = xyzObjectToArray(bcfViewpoint.orthogonal_camera.camera_direction, tempVec3);
+                up = xyzObjectToArray(bcfViewpoint.orthogonal_camera.camera_up_vector, tempVec3);
 
-                camera.up = xyzObjectToArray(bcfViewpoint.orthogonal_camera.camera_up_vector, tempVec3);
-                camera.ortho.scale = bcfViewpoint.orthogonal_camera.field_of_view;
+                camera.ortho.scale = bcfViewpoint.orthogonal_camera.view_to_world_scale;
+
+                projection = "ortho";
             }
 
-            camera.eye = eye;
-            camera.up = up;
+            math.subVec4(eye, realWorldOffset);
+
+            if (camera.yUp) {
+                eye = ZToY(eye);
+                look = ZToY(look);
+                up = ZToY(up);
+            }
 
             if (rayCast) {
-                const hit = this.viewer.scene.pick({
+                const hit = scene.pick({
                     pickSurface: true,  // <<------ This causes picking to find the intersection point on the entity
                     origin: eye,
                     direction: look
                 });
-                if (hit) {
-                    camera.look = hit.worldPos;
-                } else {
-                    camera.look = math.addVec3(eye, look, tempVec3);
-                }
+                look = (hit ? hit.worldPos : math.addVec3(eye, look, tempVec3));
             } else {
-                camera.look = math.addVec3(eye, look, tempVec3);
+                look = math.addVec3(eye, look, tempVec3);
+            }
+
+            if (immediate) {
+                camera.eye = eye;
+                camera.look = look;
+                camera.up = up;
+                camera.projection = projection;
+            } else {
+                viewer.cameraFlight.flyTo({eye, look, up, duration: options.duration, projection});
             }
         }
     }
@@ -408,11 +544,19 @@ function xyzArrayToObject(arr) {
 }
 
 function xyzObjectToArray(xyz, arry) {
-    arry = new Float32Array(3);
+    arry = new Float64Array(3);
     arry[0] = xyz.x;
     arry[1] = xyz.y;
     arry[2] = xyz.z;
     return arry;
+}
+
+function YToZ(vec) {
+    return new Float64Array([vec[0], -vec[2], vec[1]]);
+}
+
+function ZToY(vec) {
+    return new Float64Array([vec[0], vec[2], -vec[1]]);
 }
 
 export {BCFViewpointsPlugin}

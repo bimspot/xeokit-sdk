@@ -1,6 +1,7 @@
 import {RENDER_FLAGS} from './renderFlags.js';
 
 const tempFloatRGB = new Float32Array([0, 0, 0]);
+const tempIntRGB = new Uint16Array([0, 0, 0]);
 
 /**
  * @private
@@ -15,7 +16,16 @@ class PerformanceNode {
         this._isObject = isObject;
 
         /**
-         * The PerformanceModel that contains this PerformanceModelNode.
+         * The {@link Scene} that contains this PerformanceNode.
+         *
+         * @property scene
+         * @type {Scene}
+         * @final
+         */
+         this.scene = model.scene;
+        
+        /**
+         * The PerformanceModel that contains this PerformanceNode.
          * @property model
          * @type {PerformanceModel}
          * @final
@@ -23,20 +33,23 @@ class PerformanceNode {
         this.model = model;
 
         /**
-         * The PerformanceModelMesh instances contained by this PerformanceModelNode
+         * The PerformanceModelMesh instances contained by this PerformanceNode
          * @property meshes
          * @type {{Array of PerformanceModelMesh}}
          * @final
          */
         this.meshes = meshes;
 
+        this._numTriangles = 0;
+
         for (var i = 0, len = this.meshes.length; i < len; i++) {  // TODO: tidier way? Refactor?
             const mesh = this.meshes[i];
             mesh.parent = this;
+            this._numTriangles += mesh.numTriangles;
         }
 
         /**
-         * ID of this PerformanceModelNode, unique within the {@link Scene}.
+         * ID of this PerformanceNode, unique within the {@link Scene}.
          * @property id
          * @type {String|Number
          * @final}
@@ -44,8 +57,6 @@ class PerformanceNode {
         this.id = id;
 
         this._flags = flags;
-        this._colorize = new Uint8Array([255, 255, 255, 255]);
-
         this._aabb = aabb;
 
         if (this._isObject) {
@@ -58,7 +69,7 @@ class PerformanceNode {
     //------------------------------------------------------------------------------------------------------------------
 
     /**
-     * Returns true to indicate that PerformanceModelNode is an {@link Entity}.
+     * Returns true to indicate that PerformanceNode is an {@link Entity}.
      * @type {Boolean}
      */
     get isEntity() {
@@ -66,7 +77,7 @@ class PerformanceNode {
     }
 
     /**
-     * Always returns ````false```` because a PerformanceModelNode can never represent a model.
+     * Always returns ````false```` because a PerformanceNode can never represent a model.
      *
      * @type {Boolean}
      */
@@ -75,9 +86,9 @@ class PerformanceNode {
     }
 
     /**
-     * Returns ````true```` if this PerformanceModelNode represents an object.
+     * Returns ````true```` if this PerformanceNode represents an object.
      *
-     * When ````true```` the PerformanceModelNode will be registered by {@link PerformanceNode#id} in
+     * When ````true```` the PerformanceNode will be registered by {@link PerformanceNode#id} in
      * {@link Scene#objects} and may also have a {@link MetaObject} with matching {@link MetaObject#id}.
      *
      * @type {Boolean}
@@ -87,7 +98,7 @@ class PerformanceNode {
     }
 
     /**
-     * World-space 3D axis-aligned bounding box (AABB) of this PerformanceModelNode.
+     * World-space 3D axis-aligned bounding box (AABB) of this PerformanceNode.
      *
      * Represented by a six-element Float32Array containing the min/max extents of the
      * axis-aligned volume, ie. ````[xmin, ymin,zmin,xmax,ymax, zmax]````.
@@ -99,11 +110,20 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is visible.
+     * The approximate number of triangles in this PerformanceNode.
+     *
+     * @type {Number}
+     */
+    get numTriangles() {
+        return this._numTriangles;
+    }
+
+    /**
+     * Sets if this PerformanceNode is visible.
      *
      * Only rendered when {@link PerformanceNode#visible} is ````true```` and {@link PerformanceNode#culled} is ````false````.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#visible} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#visible} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#visibleObjects}.
      *
      * @type {Boolean}
@@ -127,11 +147,11 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is visible.
+     * Gets if this PerformanceNode is visible.
      *
      * Only rendered when {@link PerformanceNode#visible} is ````true```` and {@link PerformanceNode#culled} is ````false````.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#visible} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#visible} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#visibleObjects}.
      *
      * @type {Boolean}
@@ -145,9 +165,9 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is highlighted.
+     * Sets if this PerformanceNode is highlighted.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#highlighted} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#highlighted} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#highlightedObjects}.
      *
      * @type {Boolean}
@@ -171,9 +191,9 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is highlighted.
+     * Gets if this PerformanceNode is highlighted.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#highlighted} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#highlighted} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#highlightedObjects}.
      *
      * @type {Boolean}
@@ -183,9 +203,9 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is xrayed.
+     * Sets if this PerformanceNode is xrayed.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#xrayed} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#xrayed} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#xrayedObjects}.
      *
      * @type {Boolean}
@@ -209,9 +229,9 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is xrayed.
+     * Gets if this PerformanceNode is xrayed.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#highlighted} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#highlighted} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#highlightedObjects}.
      *
      * @type {Boolean}
@@ -221,9 +241,9 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is selected.
+     * Gets if this PerformanceNode is selected.
      *
-     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#selected} are ````true```` the PerformanceModelNode will be
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#selected} are ````true```` the PerformanceNode will be
      * registered by {@link PerformanceNode#id} in {@link Scene#selectedObjects}.
      *
      * @type {Boolean}
@@ -247,7 +267,10 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode's edges are enhanced.
+     * Sets if this PerformanceNode is selected.
+     *
+     * When both {@link PerformanceNode#isObject} and {@link PerformanceNode#selected} are ````true```` the PerformanceNode will be
+     * registered by {@link PerformanceNode#id} in {@link Scene#selectedObjects}.
      *
      * @type {Boolean}
      */
@@ -256,7 +279,7 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode's edges are enhanced.
+     * Sets if this PerformanceNode's edges are enhanced.
      *
      * @type {Boolean}
      */
@@ -276,7 +299,7 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode's edges are enhanced.
+     * Gets if this PerformanceNode's edges are enhanced.
      *
      * @type {Boolean}
      */
@@ -285,7 +308,7 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is culled.
+     * Sets if this PerformanceNode is culled.
      *
      * Only rendered when {@link PerformanceNode#visible} is ````true```` and {@link PerformanceNode#culled} is ````false````.
      *
@@ -295,7 +318,7 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is culled.
+     * Gets if this PerformanceNode is culled.
      *
      * Only rendered when {@link PerformanceNode#visible} is ````true```` and {@link PerformanceNode#culled} is ````false````.
      *
@@ -306,7 +329,7 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is clippable.
+     * Sets if this PerformanceNode is clippable.
      *
      * Clipping is done by the {@link SectionPlane}s in {@link Scene#sectionPlanes}.
      *
@@ -328,7 +351,7 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is clippable.
+     * Gets if this PerformanceNode is clippable.
      *
      * Clipping is done by the {@link SectionPlane}s in {@link Scene#sectionPlanes}.
      *
@@ -339,7 +362,7 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is included in boundary calculations.
+     * Sets if this PerformanceNode is included in boundary calculations.
      *
      * @type {Boolean}
      */
@@ -358,7 +381,7 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is included in boundary calculations.
+     * Gets if this PerformanceNode is included in boundary calculations.
      *
      * @type {Boolean}
      */
@@ -367,7 +390,7 @@ class PerformanceNode {
     }
 
     /**
-     * Sets if this PerformanceModelNode is pickable.
+     * Sets if this PerformanceNode is pickable.
      *
      * Picking is done via calls to {@link Scene#pick}.
      *
@@ -388,7 +411,7 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode is pickable.
+     * Gets if this PerformanceNode is pickable.
      *
      * Picking is done via calls to {@link Scene#pick}.
      *
@@ -399,76 +422,94 @@ class PerformanceNode {
     }
 
     /**
-     * Gets the PerformanceModelNode's RGB colorize color, multiplies by the PerformanceModelNode's rendered fragment colors.
+     * Gets the PerformanceNode's RGB colorize color, multiplies by the PerformanceNode's rendered fragment colors.
      *
      * Each element of the color is in range ````[0..1]````.
      *
      * @type {Number[]}
      */
     set colorize(color) { // [0..1, 0..1, 0..1]
-        this._colorize[0] = Math.floor(color[0] * 255.0); // Quantize
-        this._colorize[1] = Math.floor(color[1] * 255.0);
-        this._colorize[2] = Math.floor(color[2] * 255.0);
-        const setOpacity = false;
-        for (var i = 0, len = this.meshes.length; i < len; i++) {
-            this.meshes[i]._setColor(this._colorize, setOpacity);
+        if (color) {
+            tempIntRGB[0] = Math.floor(color[0] * 255.0); // Quantize
+            tempIntRGB[1] = Math.floor(color[1] * 255.0);
+            tempIntRGB[2] = Math.floor(color[2] * 255.0);
+            for (let i = 0, len = this.meshes.length; i < len; i++) {
+                this.meshes[i]._setColorize(tempIntRGB);
+            }
+        } else {
+            for (let i = 0, len = this.meshes.length; i < len; i++) {
+                this.meshes[i]._setColorize(null);
+            }
+        }
+        if (this._isObject) {
+            const colorized = (!!color);
+            this.scene._objectColorizeUpdated(this, colorized);
         }
         this.model.glRedraw();
     }
 
     /**
-     * Gets the PerformanceModelNode's RGB colorize color, multiplies by the PerformanceModelNode's rendered fragment colors.
+     * Gets the PerformanceNode's RGB colorize color, multiplies by the PerformanceNode's rendered fragment colors.
      *
      * Each element of the color is in range ````[0..1]````.
      *
      * @type {Number[]}
      */
     get colorize() { // [0..1, 0..1, 0..1]
-        tempFloatRGB[0] = this._colorize[0] / 255.0; // Unquantize
-        tempFloatRGB[1] = this._colorize[1] / 255.0;
-        tempFloatRGB[2] = this._colorize[2] / 255.0;
+        if (this.meshes.length === 0) {
+            return null;
+        }
+        const colorize = this.meshes[0]._colorize;
+        tempFloatRGB[0] = colorize[0] / 255.0; // Unquantize
+        tempFloatRGB[1] = colorize[1] / 255.0;
+        tempFloatRGB[2] = colorize[2] / 255.0;
         return tempFloatRGB;
     }
 
     /**
-     * Sets the PerformanceModelNode's opacity factor, multiplies by the PerformanceModelNode's rendered fragment alphas.
+     * Sets the PerformanceNode's opacity factor, multiplies by the PerformanceNode's rendered fragment alphas.
      *
      * This is a factor in range ````[0..1]````.
      *
      * @type {Number}
      */
     set opacity(opacity) {
+        if (this.meshes.length === 0) {
+            return;
+        }
         if (opacity < 0) {
             opacity = 0;
         } else if (opacity > 1) {
             opacity = 1;
         }
         opacity = Math.floor(opacity * 255.0); // Quantize
-        var lastOpacity = this._colorize[3];
+        var lastOpacity = (this.meshes[0]._colorize[3] / 255.0);
         if (lastOpacity === opacity) {
             return;
         }
-        this._colorize[3] = opacity; // Only set alpha
-        const setOpacity = true;
         for (var i = 0, len = this.meshes.length; i < len; i++) {
-            this.meshes[i]._setColor(this._colorize, setOpacity);
+            this.meshes[i]._setOpacity(opacity);
         }
         this.model.glRedraw();
     }
 
     /**
-     * Gets the PerformanceModelNode's opacity factor.
+     * Gets the PerformanceNode's opacity factor.
      *
      * This is a factor in range ````[0..1]```` which multiplies by the rendered fragment alphas.
      *
      * @type {Number}
      */
     get opacity() {
-        return this._colorize[3] / 255.0;
+        if (this.meshes.length > 0) {
+            return (this.meshes[0]._colorize[3] / 255.0);
+        } else {
+            return 1.0;
+        }
     }
 
     /**
-     * Sets if to this PerformanceModelNode casts shadows.
+     * Sets if to this PerformanceNode casts shadows.
      *
      * @type {Boolean}
      */
@@ -477,7 +518,7 @@ class PerformanceNode {
     }
 
     /**
-     * Gets if this PerformanceModelNode casts shadows.
+     * Gets if this PerformanceNode casts shadows.
      *
      * @type {Boolean}
      */
@@ -486,7 +527,7 @@ class PerformanceNode {
     }
 
     /**
-     * Whether or not this PerformanceModelNode can have shadows cast upon it
+     * Whether or not this PerformanceNode can have shadows cast upon it
      *
      * @type {Boolean}
      */
@@ -495,12 +536,24 @@ class PerformanceNode {
     }
 
     /**
-     * Whether or not this PerformanceModelNode can have shadows cast upon it
+     * Whether or not this PerformanceNode can have shadows cast upon it
      *
      * @type {Boolean}
      */
     get receivesShadow() { // TODO
         return false;
+    }
+
+    /**
+     * Gets if Scalable Ambient Obscurance (SAO) will apply to this PerformanceNode.
+     *
+     * SAO is configured by the Scene's {@link SAO} component.
+     *
+     * @type {Boolean}
+     * @abstract
+     */
+    get saoEnabled() {
+        return this.model.saoEnabled;
     }
 
     _finalize() {
@@ -529,7 +582,7 @@ class PerformanceNode {
         if (this._isObject) {
             scene._deregisterObject(this);
             if (this.visible) {
-                scene._objectVisibilityUpdated(this);
+                scene._objectVisibilityUpdated(this, false);
             }
             if (this.xrayed) {
                 scene._objectXRayedUpdated(this);
@@ -539,6 +592,10 @@ class PerformanceNode {
             }
             if (this.highlighted) {
                 scene._objectHighlightedUpdated(this);
+            }
+            if (this._isObject) {
+                const colorized = false;
+                this.scene._objectColorizeUpdated(this, colorized);
             }
         }
         for (var i = 0, len = this.meshes.length; i < len; i++) {

@@ -29,7 +29,7 @@ class Perspective extends Component {
         this._state = new RenderState({
             matrix: math.mat4(),
             near : 0.1,
-            far: 10000.0
+            far: 2000.0
         });
 
         this._dirty = false;
@@ -148,7 +148,11 @@ class Perspective extends Component {
      * @param {Number} value New Perspective near plane position.
      */
     set near(value) {
-        this._state.near = (value !== undefined && value !== null) ? value : 0.1;
+        const near = (value !== undefined && value !== null) ? value : 0.1;
+        if (this._state.near === near) {
+            return;
+        }
+        this._state.near = near;
         this._needUpdate(0); // Ensure matrix built on next "tick"
         /**
          Fired whenever this Perspective's   {@link Perspective/near} property changes.
@@ -177,11 +181,15 @@ class Perspective extends Component {
      * Fires a "far" event on change.
      *
      * @property far
-     * @default 10000.0
+     * @default 2000.0
      * @type {Number}
      */
     set far(value) {
-        this._state.far = (value !== undefined && value !== null) ? value : 10000;
+        const far = (value !== undefined && value !== null) ? value : 2000.0;
+        if (this._state.far === far) {
+            return;
+        }
+        this._state.far = far;
         this._needUpdate(0); // Ensure matrix built on next "tick"
         /**
          Fired whenever this Perspective's  {@link Perspective/far} property changes.

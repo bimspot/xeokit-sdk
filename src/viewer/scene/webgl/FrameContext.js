@@ -22,6 +22,14 @@ class FrameContext {
         this.lastProgramId = null;
 
         /**
+         * Whether SAO is currently enabled during the current frame.
+         * @property withSAO
+         * @default false
+         * @type {Boolean}
+         */
+        this.withSAO = false;
+
+        /**
          * Whether backfaces are currently enabled during the current frame.
          * @property backfaces
          * @default false
@@ -137,6 +145,14 @@ class FrameContext {
          * @type {Number[]}
          */
         this.pickProjMatrix = null;
+
+        /**
+         * Whether or not the renderer is currently picking invisible objects.
+         *
+         * @property pickInvisible
+         * @type {Number}
+         */
+        this.pickInvisible = false;
 
         /** The current line width.
          *

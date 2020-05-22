@@ -1,10 +1,12 @@
 {
-  "name": "xeokit-sdk",
-  "version": "0.2.0",
-  "description": "SDK for building high-performance AEC visualizations on xeogl",
+  "name": "@xeokit/xeokit-sdk",
+  "version": "1.0.0",
+  "description": "Web Programming Toolkit for 3D/2D BIM and AEC Graphics",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "docs": "./node_modules/.bin/esdoc",
+    "publish": "npm publish --access public"
   },
   "repository": {
     "type": "git",
@@ -12,16 +14,28 @@
   },
   "keywords": [
     "webgl",
-    "xeogl",
+    "javascript",
+    "xeokit",
+    "xeolabs",
+    "ifc",
     "bim",
-    "cad"
+    "cad",
+    "bimserver",
+    "buildingsmart",
+    "openbim",
+    "solidworks",
+    "gltf",
+    "3dxml",
+    "obj",
+    "stl",
+    "3d-viewer"
   ],
   "author": "Lindsay Kay",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "See LICENSE.txt",
   "bugs": {
     "url": "https://github.com/xeokit/xeokit-sdk/issues"
   },
-  "homepage": "https://github.com/xeokit/xeokit-sdk#readme",
+  "homepage": "https://xeokit.io",
   "dependencies": {},
   "devDependencies": {
     "esdoc": "^1.1.0",

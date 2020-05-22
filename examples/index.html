@@ -15,13 +15,14 @@
 </head>
 <body>
 
+
 <div id="contents" class="container">
     <div id="list" class="content">
         <h1><a href="http://xeokit.io">xeokit</a> / Examples</h1>
     </div>
 </div>
 
-<iframe id="viewer"></iframe>
+<iframe id="viewer" src="./default.html"></iframe>
 
 <script>
 
@@ -40,12 +41,15 @@
             "annotations_externalElements"
         ],
 
-        "BIM Offline": [
+        "Serverless BIM": [
 
-            "#Loading IFC models from .xkt files",
+            "#Loading IFC models from .xkt files (recommended)",
+            "BIMOffline_XKT_HolterTower",
             "BIMOffline_XKT_Duplex",
+            "BIMOffline_XKT_Duplex_originalIFCColors",
             "BIMOffline_XKT_Schependomlaan",
             "BIMOffline_XKT_OTCConferenceCenter",
+            "BIMOffline_XKT_WestRiverSideHospital",
             "BIMOffline_XKT_includeTypes",
             "BIMOffline_XKT_objectDefaults",
             "BIMOffline_XKT_metadata_Schependomlaan",
@@ -71,16 +75,33 @@
         ],
 
         "BCF": [
-            "#Saving and loading BCF viewpoints",
+            "#Saving and loading BCF viewpoints, with perspective camera",
             "BCF_SaveViewpoint",
             "BCF_LoadViewpoint",
-            "BCF_LoadViewpoint_withSectionPlanesPlugin"
+            "BCF_LoadViewpoint_withSectionPlanesPlugin",
+            "BCF_LoadViewpoint_defaultInvisible",
+
+            "#Orthographic camera",
+            "BCF_SaveViewpoint_ortho",
+            "BCF_LoadViewpoint_ortho",
         ],
 
         "Camera": [
             "camera_CameraPathAnimation",
             "camera_fitToModel",
             "camera_CameraFlightAnimation_projection"
+        ],
+
+        "CameraControl": [
+            "CameraControl_orbit_Duplex",
+            "CameraControl_orbit_HolterTower",
+            "CameraControl_firstPerson_Duplex",
+            "CameraControl_firstPerson_HolterTower",
+            "CameraControl_planView_Schependomlaan"
+        ],
+
+        "Context Menus": [
+            "ContextMenu_Canvas_TreeViewPlugin_Custom"
         ],
 
         "Geometry": [
@@ -91,6 +112,7 @@
 
             "#Geometry builders",
             "geometry_builders_buildBoxGeometry",
+            "geometry_builders_buildGridGeometry",
             "geometry_builders_buildCylinderGeometry",
             "geometry_builders_buildSphereGeometry",
             "geometry_builders_buildTorusGeometry",
@@ -104,9 +126,10 @@
         "Gizmos": [
             "#Gizmos",
             "gizmos_NavCubePlugin",
+            "gizmos_NavCubePlugin_customColors",
             "gizmos_AxisGizmoPlugin",
-            "gizmos_PlanViewsPlugin",
             "gizmos_SectionPlanesPlugin",
+            "gizmos_SectionPlanesPlugin_createWithMouse",
             "gizmos_SectionPlanesPlugin_getSnapshot"
         ],
 
@@ -125,13 +148,23 @@
 
             "#Loading models from xeokit .XKT format",
             "loading_XKT_Duplex",
+            "loading_XKT_Duplex_originalIFCColors",
+            "loading_XKT_Duplex_transform",
             "loading_XKT_Schependomlaan",
             "loading_XKT_OTCConferenceCenter",
-            //"loading_XKT_WestRiverSideHospital",
+            "loading_XKT_WestRiverSideHospital",
             "loading_XKT_dataSource",
+            "loading_XKT_GearboxPropellorTurbine",
+
+            "#Loading models from 3DXML",
+            "loading_3DXML_Widget",
+            "loading_3DXML_materialType_Metallic",
+            "loading_3DXML_materialType_Specular",
+            "loading_3DXML_materialType_Phong",
+            "loading_3DXML_TreeView",
 
             "#Loading models from various formats",
-            "loading_3DXML_Widget",
+            "loading_glTF_Duplex_transform",
             "loading_glTF_Schependomlaan",
             "loading_glTF_Schependomlaan_lowPerf",
             "loading_glTF_dataSource",
@@ -173,12 +206,22 @@
         "Picking": [
             "#Selecting scene content",
             "picking_canvas_mesh_colorize",
+            "picking_canvas_mesh_opacity",
             "picking_canvas_mesh_highlight",
             "picking_canvas_mesh_select",
+            "picking_canvas_mesh_xray",
             "picking_canvas_surface",
 
             "picking_ray_mesh",
-            "picking_ray_surface"
+            "picking_ray_surface",
+            "picking_ray_matrix"
+        ],
+
+        "Posteffects": [
+            "#Scalable Ambient Obscurance",
+            "postEffects_SAO_Schependomlaan",
+            "postEffects_SAO_OTCConferenceCenter",
+            "postEffects_SAO_Duplex"
         ],
 
         "Scene Representations": [
@@ -192,8 +235,10 @@
 
             "#High-performance representation",
             "sceneRepresentation_PerformanceModel_instancing",
+            "sceneRepresentation_PerformanceModel_instancing_transform",
             "sceneRepresentation_PerformanceModel_instancing_benchmark",
             "sceneRepresentation_PerformanceModel_batching",
+            "sceneRepresentation_PerformanceModel_batching_transform",
             "sceneRepresentation_PerformanceModel_batching_benchmark",
             "sceneRepresentation_PerformanceModel_batching_benchmark_tiles",
             "sceneRepresentation_PerformanceModel_metadata"
@@ -211,6 +256,46 @@
 
         "Spinner": [
             "spinner_custom"
+        ],
+
+        "Storey Views": [
+
+            "#Setting up 3D views of storeys",
+
+            "storeyViews_StoreyViewsPlugin_showStoreyObjects",
+            "storeyViews_StoreyViewsPlugin_gotoStoreyCamera",
+            "storeyViews_StoreyViewsPlugin_gotoStoreyCamera2",
+
+            "#Creating interactive 2D plan views",
+
+            "storeyViews_StoreyViewsPlugin_createStoreyMap",
+            "storeyViews_StoreyViewsPlugin_createStoreyMap_height",
+            "storeyViews_StoreyViewsPlugin_pickStoreyMap",
+
+            "#UX Recipes",
+
+            "storeyViews_StoreyViewsPlugin_recipe1",
+            "storeyViews_StoreyViewsPlugin_recipe2",
+            "storeyViews_StoreyViewsPlugin_recipe3",
+            "storeyViews_StoreyViewsPlugin_recipe4"
+        ],
+
+        "Techniques": [
+            "techniques_nonInteractiveQuality",
+            "techniques_findComplexEntities"
+        ],
+
+        "Tree Views": [
+            "TreeViewPlugin_Containment",
+            "TreeViewPlugin_Types",
+            "TreeViewPlugin_Storeys",
+            "TreeViewPlugin_options_rootName",
+            "loading_3DXML_TreeView"
+        ],
+
+        "Viewer": [
+            "viewer_createDestroyRepeat",
+            "viewer_createDestroyRepeatNewCanvas"
         ]
     };
 

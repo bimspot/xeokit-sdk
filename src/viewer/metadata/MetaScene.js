@@ -176,14 +176,17 @@ class MetaScene {
             }
             if (newObject.parent === undefined || newObject.parent === null) {
                 metaModel.rootMetaObject = metaObject;
-            } else {
+            } else if (newObject.parent) {
                 let parentMetaObject = this.metaObjects[newObject.parent];
-                metaObject.parent = parentMetaObject;
-                parentMetaObject.children = parentMetaObject.children || [];
-                parentMetaObject.children.push(metaObject);
+                if (parentMetaObject) {
+                    metaObject.parent = parentMetaObject;
+                    parentMetaObject.children = parentMetaObject.children || [];
+                    parentMetaObject.children.push(metaObject);
+                }
             }
         }
 
+        this.fire("metaModelCreated", id);
         return metaModel;
     }
 
@@ -241,17 +244,29 @@ class MetaScene {
      * Gets the {@link MetaObject#id}s of the {@link MetaObject}s within the given subtree.
      *
      * @param {String} id  ID of the root {@link MetaObject} of the given subtree.
+     * @param {String[]} [includeTypes] Optional list of types to include.
+     * @param {String[]} [excludeTypes] Optional list of types to exclude.
      * @returns {String[]} Array of {@link MetaObject#id}s.
      */
-    getObjectIDsInSubtree(id) {
+    getObjectIDsInSubtree(id, includeTypes, excludeTypes) {
         const list = [];
         const metaObject = this.metaObjects[id];
+        const includeMask = (includeTypes && includeTypes.length > 0) ? arrayToMap(includeTypes) : null;
+        const excludeMask = (excludeTypes && excludeTypes.length > 0) ? arrayToMap(excludeTypes) : null;
 
         function visit(metaObject) {
             if (!metaObject) {
                 return;
             }
-            list.push(metaObject.id);
+            var include = true;
+            if (excludeMask && excludeMask[metaObject.type]) {
+                include = false;
+            } else if (includeMask && (!includeMask[metaObject.type])) {
+                include = false;
+            }
+            if (include) {
+                list.push(metaObject.id);
+            }
             const children = metaObject.children;
             if (children) {
                 for (var i = 0, len = children.length; i < len; i++) {
@@ -263,6 +278,28 @@ class MetaScene {
         visit(metaObject);
         return list;
     }
+
+    /**
+     * Iterates over the {@link MetaObject}s within the subtree.
+     *
+     * @param {String} id ID of root {@link MetaObject}.
+     * @param {Function} callback Callback fired at each {@link MetaObject}.
+     */
+    withMetaObjectsInSubtree(id, callback) {
+        const metaObject = this.metaObjects[id];
+        if (!metaObject) {
+            return;
+        }
+        metaObject.withMetaObjectsInSubtree(callback);
+    }
+}
+
+function arrayToMap(array) {
+    const map = {};
+    for (var i = 0, len = array.length; i < len; i++) {
+        map[array[i]] = true;
+    }
+    return map;
 }
 
 export {MetaScene};

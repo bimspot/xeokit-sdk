@@ -3,20 +3,20 @@ import {PerformanceModel} from "../../viewer/scene/PerformanceModel/PerformanceM
 import {Plugin} from "../../viewer/Plugin.js";
 import {XKTDefaultDataSource} from "./XKTDefaultDataSource.js";
 import {IFCObjectDefaults} from "../../viewer/metadata/IFCObjectDefaults.js";
-import * as p from "./lib/pako.js";
-const pako = window.pako || p;
 
-const XKT_VERSION = 1; // XKT format version supported by this XKTLoaderPlugin
+import {ParserV1} from "./parsers/ParserV1.js";
+import {ParserV2} from "./parsers/ParserV2.js";
+import {ParserV3} from "./parsers/ParserV3.js";
+import {ParserV4} from "./parsers/ParserV4.js";
+import {ParserV5} from "./parsers/ParserV5.js";
 
-const decompressColor = (function () {
-    const color2 = new Float32Array(3);
-    return function (color) {
-        color2[0] = color[0] / 255.0;
-        color2[1] = color[1] / 255.0;
-        color2[2] = color[2] / 255.0;
-        return color2;
-    };
-})();
+const parsers = {};
+
+parsers[ParserV1.version] = ParserV1;
+parsers[ParserV2.version] = ParserV2;
+parsers[ParserV3.version] = ParserV3;
+parsers[ParserV4.version] = ParserV4;
+parsers[ParserV5.version] = ParserV5;
 
 /**
  * {@link Viewer} plugin that loads models from xeokit's optimized *````.xkt````* format.
@@ -41,10 +41,9 @@ const decompressColor = (function () {
  * XKTLoaderPlugin and the ````xeokit-gltf-to-xkt```` tool (see below) are based on prototypes
  * by [Toni Marti](https://github.com/tmarti) at [uniZite](https://www.unizite.com/login).
  *
- * ## Creating *````.xkt````* files
+ * ## Creating *````.xkt````* files and metadata
  *
- * Use the node.js-based [xeokit-gltf-to-xkt](https://github.com/xeokit/xeokit-gltf-to-xkt) tool to
- * convert your ````glTF```` IFC files to *````.xkt````* format.
+ * See [Creating Files for Offline BIM](https://github.com/xeokit/xeokit-sdk/wiki/Creating-Files-for-Offline-BIM).
  *
  * ## Scene representation
  *
@@ -148,6 +147,27 @@ const decompressColor = (function () {
  * model.destroy();
  * ````
  *
+ * ## Transforming
+ *
+ * We have the option to rotate, scale and translate each  *````.xkt````* model as we load it.
+ *
+ * This lets us load multiple models, or even multiple copies of the same model, and position them apart from each other.
+ *
+ * In the example below, we'll scale our model to half its size, rotate it 90 degrees about its local X-axis, then
+ * translate it 100 units along its X axis.
+ *
+ * [[Run example](https://xeokit.github.io/xeokit-sdk/examples/#loading_XKT_Duplex_transform)]
+ *
+ * ````javascript
+ * xktLoader.load({
+ *      src: "./models/xkt/duplex/duplex.xkt",
+ *      metaModelSrc: "./metaModels/duplex/metaModel.json",
+ *      rotation: [90,0,0],
+ *      scale: [0.5, 0.5, 0.5],
+ *      position: [100, 0, 0]
+ * });
+ * ````
+ *
  * ## Including and excluding IFC types
  *
  * We can also load only those objects that have the specified IFC types.
@@ -182,7 +202,7 @@ const decompressColor = (function () {
  *
  * ## Configuring initial IFC object appearances
  *
- * We can specify the initial appearance of loaded objects according to their IFC types.
+ * We can specify the custom initial appearance of loaded objects according to their IFC types.
  *
  * This is useful for things like:
  *
@@ -218,6 +238,36 @@ const decompressColor = (function () {
  *      objectDefaults: myObjectDefaults // Use our custom initial default states for object Entities
  * });
  * ````
+ *
+ * When we don't customize the appearance of IFC types, as just above, then IfcSpace elements tend to obscure other
+ * elements, which can be confusing.
+ *
+ * It's often helpful to make IfcSpaces transparent and unpickable, like this:
+ *
+ * ````javascript
+ * const xktLoader = new XKTLoaderPlugin(viewer, {
+ *    objectDefaults: {
+ *        IfcSpace: {
+ *            pickable: false,
+ *            opacity: 0.2
+ *        }
+ *    }
+ * });
+ * ````
+ *
+ * Alternatively, we could just make IfcSpaces invisible, which also makes them unpickable:
+ *
+ * ````javascript
+ * const xktLoader = new XKTLoaderPlugin(viewer, {
+ *    objectDefaults: {
+ *        IfcSpace: {
+ *            visible: false
+ *        }
+ *    }
+ * });
+ * ````
+ *
+ * * [[Run example](https://xeokit.github.io/xeokit-sdk/examples/#BIMOffline_XKT_originalIFCColors)]
  *
  * ## Configuring a custom data source
  *
@@ -285,6 +335,7 @@ class XKTLoaderPlugin extends Plugin {
      * @param {Object} [cfg.dataSource] A custom data source through which the XKTLoaderPlugin can load model and metadata files. Defaults to an instance of {@link XKTDefaultDataSource}, which loads uover HTTP.
      * @param {String[]} [cfg.includeTypes] When loading metadata, only loads objects that have {@link MetaObject}s with {@link MetaObject#type} values in this list.
      * @param {String[]} [cfg.excludeTypes] When loading metadata, never loads objects that have {@link MetaObject}s with {@link MetaObject#type} values in this list.
+     * @param {Boolean} [cfg.excludeUnclassifiedObjects=false] When loading metadata and this is ````true````, will only load {@link Entity}s that have {@link MetaObject}s (that are not excluded). This is useful when we don't want Entitys in the Scene that are not represented within IFC navigation components, such as {@link StructureTreeViewPlugin}.
      */
     constructor(viewer, cfg = {}) {
 
@@ -294,15 +345,15 @@ class XKTLoaderPlugin extends Plugin {
         this.objectDefaults = cfg.objectDefaults;
         this.includeTypes = cfg.includeTypes;
         this.excludeTypes = cfg.excludeTypes;
+        this.excludeUnclassifiedObjects = cfg.excludeUnclassifiedObjects;
     }
 
     /**
-     * The *````.xkt````* format version supported by this XKTLoaderPlugin.
-     *
-     * @type {Number}
+     * Gets the ````.xkt```` format versions supported by this XKTLoaderPlugin/
+     * @returns {string[]}
      */
-    static get XKTVersion() {
-        return XKT_VERSION;
+    get supportedVersions() {
+        return Object.keys(parsers);
     }
 
     /**
@@ -405,8 +456,37 @@ class XKTLoaderPlugin extends Plugin {
         return this._excludeTypes;
     }
 
+
     /**
-     * Loads a .xkt model into this XKTLoaderPlugin's {@link Viewer}.
+     * Sets whether we load objects that don't have IFC types.
+     *
+     * When loading models with metadata and this is ````true````, XKTLoaderPlugin will not load objects
+     * that don't have IFC types.
+     *
+     * Default value is ````false````.
+     *
+     * @type {Boolean}
+     */
+    set excludeUnclassifiedObjects(value) {
+        this._excludeUnclassifiedObjects = !!value;
+    }
+
+    /**
+     * Gets whether we load objects that don't have IFC types.
+     *
+     * When loading models with metadata and this is ````true````, XKTLoaderPlugin will not load objects
+     * that don't have IFC types.
+     *
+     * Default value is ````false````.
+     *
+     * @type {Boolean}
+     */
+    get excludeUnclassifiedObjects() {
+        return this._excludeUnclassifiedObjects;
+    }
+
+    /**
+     * Loads an ````.xkt```` model into this XKTLoaderPlugin's {@link Viewer}.
      *
      * @param {*} params Loading parameters.
      * @param {String} [params.id] ID to assign to the root {@link Entity#id}, unique among all components in the Viewer's {@link Scene}, generated automatically by default.
@@ -423,6 +503,9 @@ class XKTLoaderPlugin extends Plugin {
      * @param {Number[]} [params.rotation=[0,0,0]] The model's World-space rotation, as Euler angles given in degrees, for each of the X, Y and Z axis.
      * @param {Number[]} [params.matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]] The model's world transform matrix. Overrides the position, scale and rotation parameters.
      * @param {Boolean} [params.edges=false] Indicates if the model's edges are initially emphasized.
+     * @param {Boolean} [params.saoEnabled=true] Indicates if Scalable Ambient Obscurance (SAO) will apply to the model. SAO is configured by the Scene's {@link SAO} component.
+     * @param {Boolean} [params.backfaces=false] Indicates if backfaces are visible on the model. Making this ````true```` will reduce rendering performance.
+     * @param {Boolean} [params.excludeUnclassifiedObjects=false] When loading metadata and this is ````true````, will only load {@link Entity}s that have {@link MetaObject}s (that are not excluded). This is useful when we don't want Entitys in the Scene that are not represented within IFC navigation components, such as {@link StructureTreeViewPlugin}.
      * @returns {Entity} Entity representing the model, which will have {@link Entity#isModel} set ````true```` and will be registered by {@link Entity#id} in {@link Scene#models}.
      */
     load(params = {}) {
@@ -433,8 +516,7 @@ class XKTLoaderPlugin extends Plugin {
         }
 
         const performanceModel = new PerformanceModel(this.viewer.scene, utils.apply(params, {
-            isModel: true,
-            preCompressed: true
+            isModel: true
         }));
 
         const modelId = performanceModel.id;  // In case ID was auto-generated
@@ -470,6 +552,8 @@ class XKTLoaderPlugin extends Plugin {
                 options.objectDefaults = objectDefaults;
             }
 
+            options.excludeUnclassifiedObjects = (params.excludeUnclassifiedObjects !== undefined) ? (!!params.excludeUnclassifiedObjects) : this._excludeUnclassifiedObjects;
+
             const processMetaModelData = (metaModelData) => {
 
                 this.viewer.metaScene.createMetaModel(modelId, metaModelData, {
@@ -481,7 +565,6 @@ class XKTLoaderPlugin extends Plugin {
 
                 if (params.src) {
                     this._loadModel(params.src, params, options, performanceModel);
-
                 } else {
                     this._parseModel(params.xkt, params, options, performanceModel);
                 }
@@ -500,42 +583,36 @@ class XKTLoaderPlugin extends Plugin {
                     processMetaModelData(metaModelData);
 
                 }, (errMsg) => {
+
                     this.error(`load(): Failed to load model metadata for model '${modelId} from  '${metaModelSrc}' - ${errMsg}`);
+
                     this.viewer.scene.canvas.spinner.processes--;
                 });
 
             } else if (params.metaModelData) {
-
                 processMetaModelData(params.metaModelData);
             }
 
         } else {
-
             if (params.src) {
                 this._loadModel(params.src, params, options, performanceModel);
-
             } else {
                 this._parseModel(params.xkt, params, options, performanceModel);
             }
         }
 
-        performanceModel.once("destroyed", () => {
-            this.viewer.metaScene.destroyMetaModel(modelId);
-        });
-
         return performanceModel;
     }
 
     _loadModel(src, params, options, performanceModel) {
+
         const spinner = this.viewer.scene.canvas.spinner;
+
         spinner.processes++;
+
         this._dataSource.getXKT(params.src, (arrayBuffer) => {
                 this._parseModel(arrayBuffer, params, options, performanceModel);
                 spinner.processes--;
-                this.viewer.scene.once("tick", () => {
-                    performanceModel.scene.fire("modelLoaded", performanceModel.id); // FIXME: Assumes listeners know order of these two events
-                    performanceModel.fire("loaded", true, true);
-                });
             },
             (errMsg) => {
                 spinner.processes--;
@@ -545,150 +622,36 @@ class XKTLoaderPlugin extends Plugin {
     }
 
     _parseModel(arrayBuffer, params, options, performanceModel) {
-        const deflatedData = this._extractData(arrayBuffer);
-        if (!deflatedData) { // Error
-            return;
-        }
-        const inflatedData = this._inflateData(deflatedData);
-        this._loadDataIntoModel(inflatedData, options, performanceModel);
-    }
 
-    _extractData(arrayBuffer) {
         const dataView = new DataView(arrayBuffer);
         const dataArray = new Uint8Array(arrayBuffer);
         const xktVersion = dataView.getUint32(0, true);
-        if (xktVersion > XKT_VERSION) {
-            this.error("Incompatible .XKT file version; this XKTLoaderPlugin supports versions <= V" + XKT_VERSION);
+        const parser = parsers[xktVersion];
+
+        if (!parser) {
+            this.error("Unsupported .XKT file version: " + xktVersion + " - this XKTLoaderPlugin supports versions " + Object.keys(parsers));
             return;
         }
+
+        this.log("Loading .xkt V" + xktVersion);
+
         const numElements = dataView.getUint32(4, true);
         const elements = [];
         let byteOffset = (numElements + 2) * 4;
         for (let i = 0; i < numElements; i++) {
             const elementSize = dataView.getUint32((i + 2) * 4, true);
-            elements.push(dataArray.slice(byteOffset, byteOffset + elementSize));
+            elements.push(dataArray.subarray(byteOffset, byteOffset + elementSize));
             byteOffset += elementSize;
         }
-        return {
-            positions: elements[0],
-            normals: elements[1],
-            indices: elements[2],
-            edgeIndices: elements[3],
-            meshPositions: elements[4],
-            meshIndices: elements[5],
-            meshEdgesIndices: elements[6],
-            meshColors: elements[7],
-            entityIDs: elements[8],
-            entityMeshes: elements[9],
-            entityIsObjects: elements[10],
-            positionsDecodeMatrix: elements[11]
-        };
-    }
 
-    _inflateData(deflatedData) {
-        return {
-            positions: new Uint16Array(pako.inflate(deflatedData.positions.buffer).buffer),
-            normals: new Int8Array(pako.inflate(deflatedData.normals.buffer).buffer),
-            indices: new Uint32Array(pako.inflate(deflatedData.indices.buffer).buffer),
-            edgeIndices: new Uint32Array(pako.inflate(deflatedData.edgeIndices.buffer).buffer),
-            meshPositions: new Uint32Array(pako.inflate(deflatedData.meshPositions.buffer).buffer),
-            meshIndices: new Uint32Array(pako.inflate(deflatedData.meshIndices.buffer).buffer),
-            meshEdgesIndices: new Uint32Array(pako.inflate(deflatedData.meshEdgesIndices.buffer).buffer),
-            meshColors: new Uint8Array(pako.inflate(deflatedData.meshColors.buffer).buffer),
-            entityIDs: pako.inflate(deflatedData.entityIDs, {to: 'string'}),
-            entityMeshes: new Uint32Array(pako.inflate(deflatedData.entityMeshes.buffer).buffer),
-            entityIsObjects: new Uint8Array(pako.inflate(deflatedData.entityIsObjects).buffer),
-            positionsDecodeMatrix: new Float32Array(pako.inflate(deflatedData.positionsDecodeMatrix).buffer)
-        };
-    }
-
-    _loadDataIntoModel(inflatedData, options, performanceModel) {
-
-        const positions = inflatedData.positions;
-        const normals = inflatedData.normals;
-        const indices = inflatedData.indices;
-        const edgeIndices = inflatedData.edgeIndices;
-        const meshPositions = inflatedData.meshPositions;
-        const meshIndices = inflatedData.meshIndices;
-        const meshEdgesIndices = inflatedData.meshEdgesIndices;
-        const meshColors = inflatedData.meshColors;
-        const entityIDs = JSON.parse(inflatedData.entityIDs);
-        const entityMeshes = inflatedData.entityMeshes;
-        const entityIsObjects = inflatedData.entityIsObjects;
-        const numMeshes = meshPositions.length;
-        const numEntities = entityMeshes.length;
-
-        for (let i = 0; i < numEntities; i++) {
-
-            const entityId = entityIDs [i];
-            const metaObject = this.viewer.metaScene.metaObjects[entityId];
-            const entityDefaults = {};
-            const meshDefaults = {};
-
-            if (metaObject) {
-
-                if (options.excludeTypesMap && metaObject.type && options.excludeTypesMap[metaObject.type]) {
-                    continue;
-                }
-
-                if (options.includeTypesMap && metaObject.type && (!options.includeTypesMap[metaObject.type])) {
-                    continue;
-                }
-
-                const props = options.objectDefaults ? options.objectDefaults[metaObject.type || "DEFAULT"] : null;
-
-                if (props) {
-                    if (props.visible === false) {
-                        entityDefaults.visible = false;
-                    }
-                    if (props.pickable === false) {
-                        entityDefaults.pickable = false;
-                    }
-                    if (props.colorize) {
-                        meshDefaults.color = props.colorize;
-                    }
-                    if (props.opacity !== undefined && props.opacity !== null) {
-                        meshDefaults.opacity = props.opacity;
-                    }
-                }
-            } else {
-            //    this.warn("metaobject not found for entity: " + entityId);
-            }
-
-            const lastEntity = (i === numEntities - 1);
-            const meshIds = [];
-
-            for (let j = entityMeshes [i], jlen = lastEntity ? entityMeshes.length : entityMeshes [i + 1]; j < jlen; j++) {
-
-                const lastMesh = (j === (numMeshes - 1));
-                const meshId = entityId + ".mesh." + j;
-
-                const color = decompressColor(meshColors.slice((j * 4), (j * 4) + 3));
-                const opacity = meshColors[(j * 4) + 3] / 255.0;
-
-                performanceModel.createMesh(utils.apply(meshDefaults, {
-                    id: meshId,
-                    primitive: "triangles",
-                    positions: positions.slice(meshPositions [j], lastMesh ? positions.length : meshPositions [j + 1]),
-                    normals: normals.slice(meshPositions [j], lastMesh ? positions.length : meshPositions [j + 1]),
-                    indices: indices.slice(meshIndices [j], lastMesh ? indices.length : meshIndices [j + 1]),
-                    edgeIndices: edgeIndices.slice(meshEdgesIndices [j], lastMesh ? edgeIndices.length : meshEdgesIndices [j + 1]),
-                    positionsDecodeMatrix: inflatedData.positionsDecodeMatrix,
-                    color: color,
-                    opacity: opacity
-                }));
-
-                meshIds.push(meshId);
-            }
-
-            performanceModel.createEntity(utils.apply(entityDefaults, {
-                id: entityId,
-                isObject: (entityIsObjects [i] === 1),
-                meshIds: meshIds
-            }));
-        }
+        parser.parse(this.viewer, options, elements, performanceModel);
 
         performanceModel.finalize();
+
+        performanceModel.scene.once("tick", () => {
+            performanceModel.scene.fire("modelLoaded", performanceModel.id); // FIXME: Assumes listeners know order of these two events
+            performanceModel.fire("loaded", true, false); // Don't forget the event, for late subscribers
+        });
     }
 }
 

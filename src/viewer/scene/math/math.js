@@ -2285,6 +2285,31 @@ const math = {
     },
 
     /**
+     * Returns true if the two 4x4 matrices are the same.
+     * @param m1
+     * @param m2
+     * @returns {boolean}
+     */
+    compareMat4(m1, m2) {
+        return m1[0] === m2[0] &&
+            m1[1] === m2[1] &&
+            m1[2] === m2[2] &&
+            m1[3] === m2[3] &&
+            m1[4] === m2[4] &&
+            m1[5] === m2[5] &&
+            m1[6] === m2[6] &&
+            m1[7] === m2[7] &&
+            m1[8] === m2[8] &&
+            m1[9] === m2[9] &&
+            m1[10] === m2[10] &&
+            m1[11] === m2[11] &&
+            m1[12] === m2[12] &&
+            m1[13] === m2[13] &&
+            m1[14] === m2[14] &&
+            m1[15] === m2[15];
+    },
+
+    /**
      * Transforms a three-element position by a 4x4 matrix.
      * @method transformPoint3
      * @static
@@ -3216,6 +3241,18 @@ const math = {
     }))(),
 
     /**
+     * Gets the area of an AABB.
+     *
+     * @private
+     */
+    getAABB3Area(aabb) {
+        const width = (aabb[3] - aabb[0]);
+        const height = (aabb[4] - aabb[1]);
+        const depth = (aabb[5] - aabb[2]);
+        return (width * height * depth);
+    },
+
+    /**
      * Gets the center of an AABB.
      *
      * @private
@@ -3593,8 +3630,8 @@ const math = {
             for (i = 0; i < lenPositions; i += 3) {
 
                 tempVec3a[0] = positions[i];
-                tempVec3a[1] = positions[i+1];
-                tempVec3a[2] = positions[i+2];
+                tempVec3a[1] = positions[i + 1];
+                tempVec3a[2] = positions[i + 2];
 
                 dist = Math.abs(math.lenVec3(math.subVec3(tempVec3a, sphere, tempVec3b)));
 
@@ -3792,6 +3829,10 @@ const math = {
         aabb[3] = -math.MAX_DOUBLE;
 
         return aabb;
+    },
+
+    point3AABB3Intersect(aabb, p) {
+        return aabb[0] > p[0] || aabb[3] < p[0] || aabb[1] > p[1] || aabb[4] < p[1] || aabb[2] > p[2] || aabb[5] < p[2];
     },
 
     /**
@@ -5070,7 +5111,6 @@ math.buildEdgeIndices = (function () {
         return (largeIndex) ? new Uint32Array(edgeIndices) : new Uint16Array(edgeIndices);
     };
 })();
-
 
 
 export {math};

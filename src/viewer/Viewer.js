@@ -1,6 +1,6 @@
 import {Scene} from "./scene/scene/Scene.js";
 import {CameraFlightAnimation} from "./scene/camera/CameraFlightAnimation.js";
-import {CameraControl} from "./scene/camera/CameraControl.js";
+import {CameraControl} from "./scene/CameraControl/CameraControl.js";
 import {MetaScene} from "./metadata/MetaScene.js";
 
 /**
@@ -28,6 +28,7 @@ class Viewer {
      * @param {Boolean} [cfg.clearEachPass=false] When doing multiple passes per frame, specifies if to clear the canvas before each pass (true) or just before the first pass (false).
      * @param {Boolean} [cfg.preserveDrawingBuffer=true]  Whether or not to preserve the WebGL drawing buffer. This needs to be ````true```` for {@link Viewer#getSnapshot} to work.
      * @param {Boolean} [cfg.transparent=true]  Whether or not the canvas is transparent.
+     * @param {Boolean} [cfg.premultipliedAlpha=false]  Whether or not you want alpha composition with premultiplied alpha. Highlighting and selection works best when this is ````false````.
      * @param {Boolean} [cfg.gammaInput=true]  When true, expects that all textures and colors are premultiplied gamma.
      * @param {Boolean} [cfg.gammaOutput=true]  Whether or not to render with pre-multiplied gama.
      * @param {Number} [cfg.gammaFactor=2.2] The gamma factor to use when rendering with pre-multiplied gamma.
@@ -35,6 +36,7 @@ class Viewer {
      * @param {String} [cfg.units="meters"] The measurement unit type. Accepted values are ````"meters"````, ````"metres"````, , ````"centimeters"````, ````"centimetres"````, ````"millimeters"````,  ````"millimetres"````, ````"yards"````, ````"feet"```` and ````"inches"````.
      * @param {Number} [cfg.scale=1] The number of Real-space units in each World-space coordinate system unit.
      * @param {Number[]} [cfg.origin=[0,0,0]] The Real-space 3D origin, in current measurement units, at which the World-space coordinate origin ````[0,0,0]```` sits.
+     * @param {Boolean} [cfg.saoEnabled=false] Whether to enable Scalable Ambient Obscurance (SAO) effect. See {@link SAO} for more info.
      * @throws {String} Throws an exception when both canvasId or canvasElement are missing or they aren't pointing to a valid HTMLCanvasElement.
      */
     constructor(cfg) {
@@ -57,10 +59,11 @@ class Viewer {
             canvasElement: cfg.canvasElement,
             webgl2: false,
             contextAttr: {
-                preserveDrawingBuffer: cfg.preserveDrawingBuffer !== false
+                preserveDrawingBuffer: cfg.preserveDrawingBuffer !== false,
+                premultipliedAlpha: (!!cfg.premultipliedAlpha)
             },
             spinnerElementId: cfg.spinnerElementId,
-            transparent: cfg.transparent !== false,
+            transparent: (cfg.transparent !== false),
             gammaInput: true,
             gammaOutput: true,
             clearColorAmbient: cfg.clearColorAmbient,
@@ -68,7 +71,8 @@ class Viewer {
             ticksPerOcclusionTest: 20,
             units: cfg.units,
             scale: cfg.scale,
-            origin: cfg.origin
+            origin: cfg.origin,
+            saoEnabled: cfg.saoEnabled
         });
 
         /**
@@ -115,12 +119,7 @@ class Viewer {
             doublePickFlyTo: true
         });
 
-        /**
-         * {@link Plugin}s that have been installed into this Viewer, mapped to their IDs.
-         * @property plugins
-         * @type {{string:Plugin}}
-         */
-        this.plugins = {};
+        this._plugins = [];
 
         /**
          * Subscriptions to events sent with {@link fire}.
@@ -191,11 +190,7 @@ class Viewer {
      * @private
      */
     addPlugin(plugin) {
-        if (this.plugins[plugin.id]) {
-            this.error(`Plugin with this ID already installed: ${plugin.id}`);
-        }
-        this.plugins[plugin.id] = plugin;
-        this.log(`Installed plugin: ${plugin.id}`);
+        this._plugins.push(plugin);
     }
 
     /**
@@ -204,20 +199,16 @@ class Viewer {
      * @private
      */
     removePlugin(plugin) {
-        const installedPlugin = this.plugins[plugin.id];
-        if (!installedPlugin) {
-            this.error(`Can't remove plugin - no plugin with this ID is installed: ${plugin.id}`);
-            return;
+        for (let i = 0, len = this._plugins.length; i < len; i++) {
+            const p = this._plugins[i];
+            if (p === plugin) {
+                if (p.clear) {
+                    p.clear();
+                }
+                this._plugins.splice(i, 1);
+                return;
+            }
         }
-        if (installedPlugin !== plugin) {
-            this.error(`Can't remove plugin - a different plugin is installed with this ID: ${plugin.id}`);
-            return;
-        }
-        if (installedPlugin.clear) {
-            installedPlugin.clear();
-        }
-        delete this.plugins[plugin.id];
-        this.log(`Removed plugin: ${plugin.id}`);
     }
 
     /**
@@ -227,35 +218,28 @@ class Viewer {
      * @private
      */
     sendToPlugins(name, value) {
-        const plugins = this.plugins;
-        for (const id in plugins) {
-            if (plugins.hasOwnProperty(id)) {
-                plugins[id].send(name, value);
+        for (let i = 0, len = this._plugins.length; i < len; i++) {
+            const p = this._plugins[i];
+            if (p.send) {
+                p.send(name, value);
             }
         }
     }
 
     /**
-     * Clears content from this Viewer and all installed {@link Plugin}s.
+     * @private
+     * @deprecated
      */
     clear() {
-        this.sendToPlugins("clear");
+        throw "Viewer#clear() no longer implemented - use '#sendToPlugins(\"clear\") instead";
     }
 
     /**
-     * Resets viewing state.
-     *
-     * Sends a "resetView" message to each installed {@link Plugin}.
+     * @private
+     * @deprecated
      */
     resetView() {
-        this.sendToPlugins("resetView");
-
-        // Clear sectionPlanes at xeokit level
-
-        // TODO
-        // this.show();
-        // this.hide("space");
-        // this.hide("DEFAULT");
+        throw "Viewer#resetView() no longer implemented - use CameraMemento & ObjectsMemento classes instead";
     }
 
     /**
@@ -274,23 +258,51 @@ class Viewer {
      * @param {Number} [params.width] Desired width of result in pixels - defaults to width of canvas.
      * @param {Number} [params.height] Desired height of result in pixels - defaults to height of canvas.
      * @param {String} [params.format="jpeg"] Desired format; "jpeg", "png" or "bmp".
-     * @returns {String} String-encoded image data.
+     * @returns {String} String-encoded image data URI.
      */
     getSnapshot(params = {}) {
         this.sendToPlugins("snapshotStarting"); // Tells plugins to hide things that shouldn't be in snapshot
-        this.scene.render(); // Renders without the hidden things
-        const imageData = this.scene.canvas._getSnapshot(params);
+
+        const resize = (params.width !== undefined && params.height !== undefined);
+        const canvas = this.scene.canvas.canvas;
+        const saveWidth = canvas.clientWidth;
+        const saveHeight = canvas.clientHeight;
+        const saveCssWidth = canvas.style.width;
+        const saveCssHeight = canvas.style.height;
+
+        const width = params.width ? Math.floor(params.width) : canvas.width;
+        const height = params.height ? Math.floor(params.height) : canvas.height;
+
+        if (resize) {
+            canvas.style.width = width + "px";
+            canvas.style.height = height + "px";
+        }
+
+        this.scene.render(true);
+
+        const imageDataURI = this.scene.canvas._getSnapshot(params);
+
+        if (resize) {
+            canvas.style.width = saveCssWidth;
+            canvas.style.height = saveCssHeight;
+            canvas.width = saveWidth;
+            canvas.height = saveHeight;
+
+            this.scene.glRedraw();
+        }
+
         this.sendToPlugins("snapshotFinished");
-        return imageData;
+
+        return imageDataURI;
     }
 
     /** Destroys this Viewer.
      */
     destroy() {
-        for (let id in this.plugins) {
-            if (this.plugins.hasOwnProperty(id)) {
-                this.plugins[id].destroy();
-            }
+        const plugins = this._plugins.slice(); // Array will modify as we delete plugins
+        for (let i = 0, len = plugins.length; i < len; i++) {
+            const plugin = plugins[i];
+            plugin.destroy();
         }
         this.scene.destroy();
     }

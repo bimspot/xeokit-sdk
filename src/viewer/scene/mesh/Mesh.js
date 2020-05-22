@@ -252,6 +252,8 @@ class Mesh extends Component {
         this._aabb = null;
         this._aabbDirty = true;
 
+        this._numTriangles = (this._geometry ? this._geometry.numTriangles : 0);
+
         this.scene._aabbDirty = true;
 
         this._scale = math.vec3();
@@ -918,6 +920,15 @@ class Mesh extends Component {
     }
 
     /**
+     * The approximate number of triangles in this Mesh.
+     *
+     * @type {Number}
+     */
+    get numTriangles() {
+        return this._numTriangles;
+    }
+
+    /**
      * Sets if this Mesh is visible.
      *
      * Only rendered when {@link Mesh#visible} is ````true```` and {@link Mesh#culled} is ````false````.
@@ -1237,6 +1248,18 @@ class Mesh extends Component {
     }
 
     /**
+     * Gets if this Mesh can have Scalable Ambient Obscurance (SAO) applied to it.
+     *
+     * SAO is configured by {@link SAO}.
+     *
+     * @type {Boolean}
+     * @abstract
+     */
+    get saoEnabled() {
+        return false; // TODO: Support SAO on Meshes
+    }
+
+    /**
      * Sets the RGB colorize color for this Mesh.
      *
      * Multiplies by rendered fragment colors.
@@ -1260,6 +1283,8 @@ class Mesh extends Component {
             colorize[1] = 1;
             colorize[2] = 1;
         }
+        const colorized = (!!value);
+        this.scene._objectColorizeUpdated(this, colorized);
         this.glRedraw();
     }
 
@@ -1729,6 +1754,8 @@ class Mesh extends Component {
             if (this._highlighted) {
                 this.scene._objectHighlightedUpdated(this, false);
             }
+            const colorized = false;
+            this.scene._objectColorizeUpdated(this, colorized);
         }
         if (this._isModel) {
             this.scene._deregisterModel(this);

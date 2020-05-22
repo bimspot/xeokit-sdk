@@ -1,4 +1,3 @@
-import {Canvas2Image} from "../libs/canvas2image.js";
 import {core} from "../core.js";
 import {math} from '../math/math.js';
 import {stats} from '../stats.js';
@@ -82,14 +81,10 @@ class Canvas extends Component {
         this.contextAttr = cfg.contextAttr || {};
         this.contextAttr.alpha = this.transparent;
 
-        if (this.contextAttr.preserveDrawingBuffer === undefined || this.contextAttr.preserveDrawingBuffer === null) {
-            this.contextAttr.preserveDrawingBuffer = true;
-        }
-
+        this.contextAttr.preserveDrawingBuffer = !!this.contextAttr.preserveDrawingBuffer;
         this.contextAttr.stencil = false;
-        this.contextAttr.antialias = true;
-        this.contextAttr.premultipliedAlpha = this.contextAttr.premultipliedAlpha !== false;
-        this.contextAttr.antialias = this.contextAttr.antialias !== false;
+        this.contextAttr.premultipliedAlpha = (!!this.contextAttr.premultipliedAlpha);  // False by default: https://github.com/xeokit/xeokit-sdk/issues/251
+        this.contextAttr.antialias = (this.contextAttr.antialias !== false);
 
         // If the canvas uses css styles to specify the sizes make sure the basic
         // width and height attributes match or the WebGL context will use 300 x 150
@@ -238,10 +233,6 @@ class Canvas extends Component {
             }
         });
 
-        this.canvas.oncontextmenu = function (e) {
-            e.preventDefault();
-        };
-
         this._spinner = new Spinner(this.scene, {
             canvas: this.canvas,
             elementId: cfg.spinnerElementId
@@ -374,28 +365,9 @@ class Canvas extends Component {
      * @returns {*}
      * @private
      */
-    _getSnapshot(params) {
-        params = params || {};
-        const width = params.width || this.canvas.width;
-        const height = params.height || this.canvas.height;
-        const format = params.format || "jpeg";
-        let image;
-        switch (format) {
-            case "jpeg":
-                image = Canvas2Image.saveAsJPEG(this.canvas, true, width, height);
-                break;
-            case "png":
-                image = Canvas2Image.saveAsPNG(this.canvas, true, width, height);
-                break;
-            case "bmp":
-                image = Canvas2Image.saveAsBMP(this.canvas, true, width, height);
-                break;
-            default:
-                this.error("Unsupported snapshot format: '" + format
-                    + "' - supported types are 'jpeg', 'bmp' and 'png' - defaulting to 'jpeg'");
-                image = Canvas2Image.saveAsJPEG(this.canvas, true, width, height);
-        }
-        return image.src;
+    _getSnapshot(params={}) {
+        const imageDataURI = this.scene._renderer.readImage(params);
+        return imageDataURI;
     }
 
     /**
@@ -450,7 +422,6 @@ class Canvas extends Component {
         // Memory leak avoidance
         this.canvas.removeEventListener("webglcontextlost", this._webglcontextlostListener);
         this.canvas.removeEventListener("webglcontextrestored", this._webglcontextrestoredListener);
-        this.canvas = null;
         this.gl = null;
         super.destroy();
     }
