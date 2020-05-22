@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {DistanceMeasurement} from "./DistanceMeasurement.js";
 import {DistanceMeasurementsControl} from "./DistanceMeasurementsControl.js";
 

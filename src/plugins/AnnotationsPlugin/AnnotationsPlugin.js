@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {Annotation} from "./Annotation.js";
 import {utils} from "../../viewer/scene/utils.js";
 import {math} from "../../viewer/scene/math/math.js";

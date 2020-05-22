@@ -1,4 +1,4 @@
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {PerformanceModel} from "../../viewer/scene/PerformanceModel/PerformanceModel.js";
 
 import {BIMServerPerformanceGeometryLoader} from "./lib/BIMServerPerformanceGeometryLoader.js";

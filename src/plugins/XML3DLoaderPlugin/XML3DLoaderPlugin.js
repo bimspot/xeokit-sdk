@@ -1,6 +1,6 @@
 import {utils} from "../../viewer/scene/utils.js"
 import {Node} from "../../viewer/scene/nodes/Node.js";
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {XML3DLoader} from "./XML3DLoader.js";
 
 /**

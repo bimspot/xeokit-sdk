@@ -1,5 +1,5 @@
 import {Node} from "../../viewer/scene/nodes/Node.js";
-import {Plugin} from "../../viewer/Plugin.js";
+import {Plugin} from "../Plugin.js";
 import {STLLoader} from "./STLLoader.js";
 import {utils} from "../../viewer/scene/utils.js";
 
