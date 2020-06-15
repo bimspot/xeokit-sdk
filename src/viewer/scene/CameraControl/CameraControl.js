@@ -44,7 +44,7 @@ import {TouchPickHandler} from "./lib/handlers/TouchPickHandler.js";
  *      + ["doublePicked"](#---doublepicked---)
  *      + ["doublePickedSurface"](#---doublepickedsurface---)
  *      + ["doublePickedNothing"](#---doublepickednothing---)
- *      + ["mouseRightClick"](#---mouserightclick---)
+ *      + ["rightClick"](#---rightclick---)
  * <br><br>
  *
  * # Overview
@@ -406,12 +406,12 @@ import {TouchPickHandler} from "./lib/handlers/TouchPickHandler.js";
  * });
  * ````
  *
- * ## "mouseRightClick"
+ * ## "rightClick"
  *
  * Event fired when we right-click on the canvas.
  *
  * ````javascript
- * cameraControl.on("rightClicked", (e) => {
+ * cameraControl.on("rightClick", (e) => {
  *      const event = e.event; // Mouse event
  *      const canvasPos = e.canvasPos;
  * });
@@ -470,7 +470,9 @@ class CameraControl extends Component {
 
             keyboardDollyRate: 10,
             mouseWheelDollyRate: 10,
-            dollyInertia: 0.75
+            dollyInertia: 0.75,
+            dollyProximityThreshold: 30.0,
+            dollyMinSpeed: 1.0
         };
 
         // Current runtime state of the CameraControl
@@ -546,6 +548,8 @@ class CameraControl extends Component {
         this.keyboardRotationRate = cfg.keyboardRotationRate;
         this.dragRotationRate = cfg.dragRotationRate;
         this.dollyInertia = cfg.dollyInertia;
+        this.dollyProximityThreshold = cfg.dollyProximityThreshold;
+        this.dollyMinSpeed = cfg.dollyMinSpeed;
         this.panInertia = cfg.panInertia;
         this.pointerEnabled = true;
         this.keyboardDollyRate = cfg.keyboardDollyRate;
@@ -1084,7 +1088,7 @@ class CameraControl extends Component {
     /**
      * Sets the dolly inertia factor.
      *
-     * This factor configures how much the {@link Camera} keeps moving after you finish dollying it
+     * This factor configures how much the {@link Camera} keeps moving after you finish dollying it.
      *
      * This factor is a value in range ````[0..1]````. A value of ````0.0```` causes dollying to immediately stop,
      * ````0.5```` causes dollying to decay 50% on each animation frame, while ````1.0```` causes no decay, which allows dollying
@@ -1114,9 +1118,53 @@ class CameraControl extends Component {
     }
 
     /**
+     * Sets the proximity to the closest object below which dolly speed decreases, and above which dolly speed increases.
+     *
+     * Default is ````35.0````.
+     *
+     * @param {Number} dollyProximityThreshold New dolly proximity threshold.
+     */
+    set dollyProximityThreshold(dollyProximityThreshold) {
+        this._configs.dollyProximityThreshold = (dollyProximityThreshold !== undefined && dollyProximityThreshold !== null) ? dollyProximityThreshold : 35.0;
+    }
+
+    /**
+     * Gets the proximity to the closest object below which dolly speed decreases, and above which dolly speed increases.
+     *
+     * Default is ````35.0````.
+     *
+     * @returns {Number} The current dolly proximity threshold.
+     */
+    get dollyProximityThreshold() {
+        return this._configs.dollyProximityThreshold;
+    }
+
+    /**
+     * Sets the minimum dolly speed.
+     *
+     * Default is ````0.05````.
+     *
+     * @param {Number} dollyMinSpeed New dolly minimum speed.
+     */
+    set dollyMinSpeed(dollyMinSpeed) {
+        this._configs.dollyMinSpeed = (dollyMinSpeed !== undefined && dollyMinSpeed !== null) ? dollyMinSpeed : 0.05;
+    }
+
+    /**
+     * Gets the minimum dolly speed.
+     *
+     * Default is ````0.05````.
+     *
+     * @returns {Number} The current minimum dolly speed.
+     */
+    get dollyMinSpeed() {
+        return this._configs.dollyMinSpeed;
+    }
+
+    /**
      * Sets the pan inertia factor.
      *
-     * This factor configures how much the {@link Camera} keeps moving after you finish panning it
+     * This factor configures how much the {@link Camera} keeps moving after you finish panning it.
      *
      * This factor is a value in range ````[0..1]````. A value of ````0.0```` causes panning to immediately stop,
      * ````0.5```` causes panning to decay 50% on each animation frame, while ````1.0```` causes no decay, which allows panning
@@ -1184,6 +1232,7 @@ class CameraControl extends Component {
      */
     destroy() {
         this._destroyHandlers();
+        this._destroyControllers();
         this._cameraUpdater.destroy();
         super.destroy();
     }
@@ -1193,6 +1242,15 @@ class CameraControl extends Component {
             const handler = this._handlers[i];
             if (handler.destroy) {
                 handler.destroy();
+            }
+        }
+    }
+
+    _destroyControllers() {
+        for (let i = 0, len = this._controllers.length; i < len; i++) {
+            const controller = this._controllers[i];
+            if (controller.destroy) {
+                controller.destroy();
             }
         }
     }

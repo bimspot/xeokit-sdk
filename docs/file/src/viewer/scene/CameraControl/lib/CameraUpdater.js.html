@@ -163,15 +163,9 @@ class CameraUpdater {
                 return;
             }
 
-            //   pivotController.updatePivotElement();
-
             let cursorType = &quot;default&quot;;
 
             const deltaTimeMilliSecs = e.deltaTime;
-            const deltaTimeSecs = deltaTimeMilliSecs / 100;
-
-            //const dollySpeed = deltaTimeSecs * configs.keyboardDollyRate;
-
 
             //----------------------------------------------------------------------------------------------------------
             // Dolly decay
@@ -225,20 +219,22 @@ class CameraUpdater {
                             const worldPos = pickResult.worldPos;
                             pivotController.setPivotPos(worldPos);
                             pivotController.hidePivot();
+                        } else {
+                            dollyDistFactor = 1.0
                         }
                     }
 
                     const dist = Math.abs(math.lenVec3(math.subVec3(pivotController.getPivotPos(), scene.camera.eye, tempVec3)));
 
-                    dollyDistFactor = dist / 50;
+                    dollyDistFactor = dist / configs.dollyProximityThreshold;
 
-                    if (dollyDistFactor &lt; 0.01) {
-                        dollyDistFactor = 0.01;
+                    if (dollyDistFactor &lt; configs.dollyMinSpeed) {
+                        dollyDistFactor = configs.dollyMinSpeed;
                     }
                 }
             }
 
-            const dollyDeltaForDist = (updates.dollyDelta * dollyDistFactor);
+            let dollyDeltaForDist = (updates.dollyDelta * dollyDistFactor);
 
             //----------------------------------------------------------------------------------------------------------
             // Rotation

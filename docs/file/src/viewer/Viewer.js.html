@@ -174,6 +174,7 @@ class Viewer {
      * @param {Number[]} [cfg.origin=[0,0,0]] The Real-space 3D origin, in current measurement units, at which the World-space coordinate origin ````[0,0,0]```` sits.
      * @param {Boolean} [cfg.saoEnabled=false] Whether to enable Scalable Ambient Obscurance (SAO) effect. See {@link SAO} for more info.
      * @throws {String} Throws an exception when both canvasId or canvasElement are missing or they aren&apos;t pointing to a valid HTMLCanvasElement.
+     * @param {Boolean} [cfg.alphaDepthMask=true] Whether writing into the depth buffer is enabled or disabled when rendering transparent objects.
      */
     constructor(cfg) {
 
@@ -208,7 +209,8 @@ class Viewer {
             units: cfg.units,
             scale: cfg.scale,
             origin: cfg.origin,
-            saoEnabled: cfg.saoEnabled
+            saoEnabled: cfg.saoEnabled,
+            alphaDepthMask: (cfg.alphaDepthMask !== false)
         });
 
         /**
@@ -379,17 +381,6 @@ class Viewer {
     }
 
     /**
-     *
-     */
-    set offscreenMode(offscreenMode) {
-        this._offscreenMode = offscreenMode;
-    }
-
-    get offscreenMode() {
-        return this._offscreenMode;
-    }
-
-    /**
      * Returns a snapshot of this Viewer&apos;s canvas as a Base64-encoded image.
      *
      * #### Usage:
@@ -427,7 +418,7 @@ class Viewer {
 
         this.scene.render(true);
 
-        const imageDataURI = this.scene.canvas._getSnapshot(params, this._offscreenMode);
+        const imageDataURI = this.scene.canvas._getSnapshot(params);
 
         if (resize) {
             canvas.style.width = saveCssWidth;

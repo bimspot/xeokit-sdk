@@ -518,7 +518,7 @@ class PerformanceModel extends Component {
             }
 
             if (this._currentBatchingLayer) {
-                if (!this._currentBatchingLayer.canCreatePortion(positions.length)) {
+                if (!this._currentBatchingLayer.canCreatePortion(positions.length, indices.length)) {
                     this._currentBatchingLayer.finalize();
                     this._currentBatchingLayer = null;
                 }
@@ -733,6 +733,15 @@ class PerformanceModel extends Component {
      */
     get backfaces() {
         return this._backfaces;
+    }
+
+    /**
+     * Gets the list of {@link Entity}s within this PerformanceModel.
+     *
+     * @returns {Entity[]}
+     */
+    get entityList() {
+        return this._nodeList;
     }
 
     //------------------------------------------------------------------------------------------------------------------

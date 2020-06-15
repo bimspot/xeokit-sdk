@@ -100,13 +100,15 @@ class BatchingLayer {
      * Tests if there is room for another portion in this BatchingLayer.
      *
      * @param lenPositions Number of positions we'd like to create in the portion.
-     * @returns {boolean} True if OK to creatye another portion.
+     * @param lenIndices Number of indices we'd like to create in this portion.
+     * @returns {boolean} True if OK to create another portion.
      */
-    canCreatePortion(lenPositions) {
+    canCreatePortion(lenPositions, lenIndices) {
         if (this._finalized) {
             throw "Already finalized";
         }
-        return (!this._finalized && this._buffer.lenPositions + lenPositions) < (this._buffer.maxVerts * 3);
+        return ((this._buffer.lenPositions + lenPositions) < (this._buffer.maxVerts * 3)
+            && (this._buffer.lenIndices + lenIndices) < (this._buffer.maxIndices));
     }
 
     /**
@@ -367,7 +369,7 @@ class BatchingLayer {
         }
         if (buffer.lenColors > 0) {
             let normalized = false;
-            state.colorsBuf = new ArrayBuf(gl, gl.ARRAY_BUFFER, buffer.colors.slice(0, buffer.Colors), buffer.lenColors, 4, gl.DYNAMIC_DRAW, normalized);
+            state.colorsBuf = new ArrayBuf(gl, gl.ARRAY_BUFFER, buffer.colors.slice(0, buffer.lenColors), buffer.lenColors, 4, gl.DYNAMIC_DRAW, normalized);
         }
         if (buffer.lenFlags > 0) {
             let normalized = true;
