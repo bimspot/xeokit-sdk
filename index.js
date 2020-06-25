@@ -1,20 +1,3 @@
-export {Viewer} from './src/viewer/Viewer'
-
-export {
-  AngleMeasurementsPlugin,
-  AnnotationsPlugin,
-  AxisGizmoPlugin,
-  BCFViewpointsPlugin,
-  BIMServerLoaderPlugin,
-  DistanceMeasurementsPlugin,
-  GLTFLoaderPlugin,
-  NavCubePlugin,
-  OBJLoaderPlugin,
-  SectionPlanesPlugin,
-  SkyboxesPlugin,
-  STLLoaderPlugin,
-  StoreyViewsPlugin,
-  TreeViewPlugin,
-  XKTLoaderPlugin,
-  XML3DLoaderPlugin,
-} from './src/plugins/index'
+export * from './src/viewer/index.js'
+export * from './src/plugins/index.js'
+export * from './src/extras/index.js'

@@ -2277,6 +2277,8 @@ class Scene extends Component {
         this.input = null;
         this._viewport = null;
         this._camera = null;
+
+
     }
 }
 
