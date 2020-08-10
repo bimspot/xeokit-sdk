@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "docs": "./node_modules/.bin/esdoc",
-    "publish": "npm publish --access public"
+    "publish": "npm publish --access public",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -36,7 +38,9 @@
     "url": "https://github.com/xeokit/xeokit-sdk/issues"
   },
   "homepage": "https://xeokit.io",
-  "dependencies": {},
+  "dependencies": {
+    "snyk": "^1.372.0"
+  },
   "devDependencies": {
     "esdoc": "^1.1.0",
     "esdoc-standard-plugin": "^1.0.0",
@@ -44,5 +48,6 @@
   },
   "files": [
     "/src"
-  ]
+  ],
+  "snyk": true
 }
